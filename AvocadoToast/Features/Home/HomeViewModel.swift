@@ -24,14 +24,12 @@ final class HomeViewModel: ObservableObject {
 
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
-        hasLoaded = true
         await load()
     }
 
     func refresh() async {
         isRefreshing = true
         await load()
-        hasLoaded = true
         isRefreshing = false
     }
 
@@ -42,6 +40,9 @@ final class HomeViewModel: ObservableObject {
         await catalogService.fetchHomeTracks()
         guard activeLoadID == requestID else { return }
         tracks = catalogService.homeTracks
+        // Mark the feed as loaded only when the request succeeds. Failed
+        // initial loads can be retried on the next appearance or pull-to-refresh.
+        hasLoaded = catalogService.homeError == nil
         isLoading = false
         activeLoadID = nil
     }
