@@ -33,10 +33,17 @@ final class LocalAudioManager: ObservableObject {
         try? fileManager.createDirectory(at: audioDir, withIntermediateDirectories: true, attributes: nil)
     }
 
-    func importAudio(from sourceURL: URL) throws -> ImportedAudio {
+    func importAudio(from sourceURL: URL) async throws -> ImportedAudio {
         let hasAccess = sourceURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
+        let destinationDirectory = audioDir
+        return try await Task.detached(priority: .userInitiated) {
+            try Self.importAudioFile(from: sourceURL, into: destinationDirectory)
+        }.value
+    }
 
+    nonisolated private static func importAudioFile(from sourceURL: URL, into audioDir: URL) throws -> ImportedAudio {
+        let fileManager = FileManager.default
         let allowedExtensions = ["mp3", "m4a", "aac", "wav", "aiff", "caf"]
         let fileExtension = sourceURL.pathExtension.lowercased()
         guard allowedExtensions.contains(fileExtension) else {
@@ -72,8 +79,7 @@ final class LocalAudioManager: ObservableObject {
             let artworkPath: String?
             if let artworkData, let image = UIImage(data: artworkData),
                let jpegData = image.jpegData(compressionQuality: 0.9) {
-                let artworkFile = audioDir.appendingPathComponent("\(id).artwork")
-                    .appendingPathExtension("jpg")
+                let artworkFile = audioDir.appendingPathComponent("\(id).artwork").appendingPathExtension("jpg")
                 do {
                     try jpegData.write(to: artworkFile, options: .atomic)
                     artworkPath = artworkFile.absoluteString
@@ -83,13 +89,19 @@ final class LocalAudioManager: ObservableObject {
             } else {
                 artworkPath = nil
             }
-            return ImportedAudio(id: id, fileURL: destination, title: title, artist: artist, duration: duration, artworkURL: artworkPath)
+            return ImportedAudio(
+                id: id,
+                fileURL: destination,
+                title: title,
+                artist: artist,
+                duration: duration,
+                artworkURL: artworkPath
+            )
         } catch {
             try? fileManager.removeItem(at: destination)
             throw error
         }
     }
-
     func deleteImportedAudio(at path: String) {
         let root = audioDir.standardizedFileURL.path + "/"
         let candidate = URL(fileURLWithPath: path).standardizedFileURL
