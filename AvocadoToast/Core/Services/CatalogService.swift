@@ -87,6 +87,11 @@ final class CatalogService: ObservableObject {
         }
         audioPlayer.onPlaybackNext = { [weak self] in self?.playNext() }
         audioPlayer.onPlaybackPrevious = { [weak self] in self?.playPrevious() }
+        audioPlayer.onPlaybackRetry = { [weak self] in
+            guard let self, self.playbackQueue.indices.contains(self.queueIndex) else { return }
+            let retryTrack = self.playbackQueue[self.queueIndex]
+            Task { await self.playQueueItem(retryTrack) }
+        }
     }
 
     // MARK: - Search
