@@ -64,7 +64,7 @@ struct NowPlayingView: View {
     }
 
     private func updateAmbientColor(for source: String?) async {
-        guard let source, let url = URL(string: source) else {
+        guard config.artworkBackgroundEnabled, let source, let url = URL(string: source) else {
             withAnimation(.easeInOut(duration: 0.6)) { ambientColor = ColorTokens.accentPrimary.opacity(0.22) }
             return
         }
