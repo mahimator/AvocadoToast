@@ -7,11 +7,14 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @StateObject private var library = LibraryService.shared
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
+    @State private var showingAudioImporter = false
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -35,6 +38,24 @@ struct LibraryView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            .fileImporter(
+                isPresented: $showingAudioImporter,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls): importAudioFiles(urls)
+                case .failure(let error): importError = error.localizedDescription
+                }
+            }
+            .alert("Audio import", isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button("OK", role: .cancel) { importError = nil }
+            } message: {
+                Text(importError ?? "")
+            }
             .onAppear { library.refresh() }
         }
     }
@@ -51,7 +72,18 @@ struct LibraryView: View {
                     .foregroundStyle(ColorTokens.textPrimary)
             }
             Spacer()
-            Button { showingNewPlaylist = true } label: {
+            Menu {
+                Button {
+                    showingNewPlaylist = true
+                } label: {
+                    Label("Create playlist", systemImage: "music.note.list")
+                }
+                Button {
+                    showingAudioImporter = true
+                } label: {
+                    Label("Import audio files", systemImage: "square.and.arrow.down")
+                }
+            } label: {
                 Image(systemName: "plus")
                     .font(.headline)
                     .foregroundStyle(ColorTokens.textPrimary)
@@ -59,9 +91,37 @@ struct LibraryView: View {
                     .background(.regularMaterial, in: Circle())
                     .overlay(Circle().strokeBorder(ColorTokens.separator))
             }
-            .accessibilityLabel("Create playlist")
+            .accessibilityLabel("Add to library")
         }
         .padding(.horizontal, 20)
+    }
+
+    private func importAudioFiles(_ urls: [URL]) {
+        var failedImports: [String] = []
+        for source in urls {
+            do {
+                let imported = try LocalAudioManager.shared.importAudio(from: source)
+                let model = TrackModel(
+                    id: imported.id,
+                    provider: "local",
+                    providerID: imported.fileURL.path,
+                    title: imported.title,
+                    artistName: imported.artist,
+                    artworkURL: nil,
+                    duration: imported.duration,
+                    isVideo: false,
+                    isPlayable: true,
+                    addedAt: Date(),
+                    playCount: 0
+                )
+                library.saveTrack(model)
+            } catch {
+                failedImports.append("\(source.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        if !failedImports.isEmpty {
+            importError = failedImports.joined(separator: "\n")
+        }
     }
 
     private var filterPicker: some View {
