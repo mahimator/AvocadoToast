@@ -23,6 +23,7 @@ final class CatalogService: ObservableObject {
 
     @Published var searchResults: [YouTubeTrack] = []
     @Published var artistSearchResults: [YouTubeChannel] = []
+    @Published var albumSearchResults: [ParsedAlbum] = []
     @Published var playlistSearchResults: [YouTubePlaylist] = []
     @Published var isSearching: Bool = false
     @Published var searchError: String?
@@ -95,6 +96,7 @@ final class CatalogService: ObservableObject {
             searchError = nil
             searchResults = []
             artistSearchResults = []
+            albumSearchResults = []
             playlistSearchResults = []
             isSearching = false
             return
@@ -106,6 +108,7 @@ final class CatalogService: ObservableObject {
         searchError = nil
         searchResults = []
         artistSearchResults = []
+        albumSearchResults = []
         playlistSearchResults = []
 
         searchTask = Task { [weak self, youtubeService = self.youtubeService] in
@@ -114,6 +117,10 @@ final class CatalogService: ObservableObject {
                 let results = await youtubeService.search(term: trimmed, limit: limit)
                 guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
                 self.searchResults = results
+            case .albums:
+                let results = await youtubeService.searchAlbums(term: trimmed, limit: limit)
+                guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
+                self.albumSearchResults = results
             case .artists:
                 let results = await youtubeService.searchArtists(term: trimmed, limit: limit)
                 guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
@@ -313,11 +320,12 @@ final class CatalogService: ObservableObject {
 // MARK: - Search type
 
 enum SearchType: String, CaseIterable, Identifiable {
-    case songs, artists, playlists
+    case songs, albums, artists, playlists
     var id: String { rawValue }
     var title: String {
         switch self {
         case .songs: "Songs"
+        case .albums: "Albums"
         case .artists: "Artists"
         case .playlists: "Playlists"
         }
