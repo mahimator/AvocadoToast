@@ -301,13 +301,6 @@ final class CatalogService: ObservableObject {
         audioPlayer.seek(to: time)
     }
 
-    func setEQGain(band: Int, gain: Float) {
-        audioPlayer.setEQGain(band: band, gain: gain)
-    }
-
-    func setEQPreset(_ preset: EQPreset) {
-        audioPlayer.setEQPreset(preset)
-    }
 }
 
 // MARK: - Search type
