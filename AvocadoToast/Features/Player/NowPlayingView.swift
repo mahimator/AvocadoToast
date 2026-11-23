@@ -193,7 +193,7 @@ struct NowPlayingView: View {
             playerSkipButton(
                 symbol: "backward.fill",
                 label: "Previous track",
-                disabled: player.currentTime <= 3 && catalog.queueIndex == 0 && catalog.repeatMode != .all
+                disabled: player.currentTime <= 3 && !catalog.canPlayPrevious
             ) {
                 catalog.playPrevious()
             }
@@ -211,7 +211,7 @@ struct NowPlayingView: View {
             playerSkipButton(
                 symbol: "forward.fill",
                 label: "Next track",
-                disabled: catalog.queueIndex >= catalog.playbackQueue.count - 1 && !catalog.shuffleEnabled && catalog.repeatMode != .all
+                disabled: !catalog.canPlayNext
             ) {
                 catalog.playNext()
             }
