@@ -68,11 +68,12 @@ struct PlaylistDetailView: View {
                         Text("Tracks")
                             .font(.headline)
                             .padding(.horizontal)
-                        ForEach(playlist) { track in
+                        ForEach(playlist.indices, id: \.self) { index in
+                            let track = playlist[index]
                             PlaylistTrackRow(track: track)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    Task { await CatalogService.shared.playTrack(track) }
+                                    Task { await CatalogService.shared.playQueue(playlist, startAt: index) }
                                 }
                         }
                     }
