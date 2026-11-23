@@ -45,7 +45,7 @@ final class CatalogService: ObservableObject {
         let library = LibraryService.shared
         library.refresh()
         savedTracks = library.savedTracks
-            .filter { $0.provider == "youtube" }
+            .filter { $0.provider == "youtube" || $0.provider == "local" }
             .map { item in
                 YouTubeTrack(
                     videoId: item.providerID.isEmpty ? item.id : item.providerID,
@@ -65,7 +65,7 @@ final class CatalogService: ObservableObject {
     }
 
     func isSaved(_ track: YouTubeTrack) -> Bool {
-        LibraryService.shared.isTrackSaved(id: track.videoId, provider: "youtube")
+        LibraryService.shared.isTrackSaved(id: track.videoId, provider: track.provider)
     }
 
     init(youtubeService: YouTubeKitService = .shared,
