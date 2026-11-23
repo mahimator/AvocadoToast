@@ -10,6 +10,7 @@ import Combine
 
 struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @ObservedObject private var catalog = catalog
     @StateObject private var viewModel = SearchViewModel()
     @State private var query = ""
     @State private var selectedCategory: SearchType = .songs
