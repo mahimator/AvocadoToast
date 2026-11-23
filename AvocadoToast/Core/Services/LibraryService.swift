@@ -68,6 +68,19 @@ final class LibraryService: ObservableObject {
         refresh()
     }
 
+    func saveTracks(_ tracks: [TrackModel]) {
+        guard !tracks.isEmpty else { return }
+        let existingKeys = Set(savedTracks.map { "\($0.provider)|\($0.id)" })
+        var inserted = Set<String>()
+        for track in tracks {
+            let key = "\(track.provider)|\(track.id)"
+            guard !existingKeys.contains(key), inserted.insert(key).inserted else { continue }
+            context.insert(track)
+        }
+        save()
+        refresh()
+    }
+
     func saveTrack(from domain: DomainTrack) {
         let track = TrackModel(
             id: domain.id,
