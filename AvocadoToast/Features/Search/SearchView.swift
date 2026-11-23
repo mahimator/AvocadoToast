@@ -374,7 +374,7 @@ final class SearchViewModel: ObservableObject {
         recentSearches = searchService.recentSearches
     }
 
-    func debounceSearch(_ text: String) {
+    func debounceSearch(_ text: String, type: SearchType = .songs) {
         debounceTask?.cancel()
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
