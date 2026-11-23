@@ -158,7 +158,7 @@ struct LibraryView: View {
                 ForEach(library.recentlyPlayed, id: \.id) { track in
                     LibraryRow(title: track.title, subtitle: track.artistName,
                                artworkURL: track.artworkURL.flatMap(URL.init(string:)),
-                               onTap: { playSavedTrack(track) })
+                               onTap: { playRecentTrack(track) })
                 }
             }
         }
@@ -313,6 +313,17 @@ struct NewPlaylistView: View {
 // MARK: - Library playback
 
 private extension LibraryView {
+    func playRecentTrack(_ model: RecentTrackModel) {
+        guard model.provider == "youtube" else { return }
+        let track = YouTubeTrack(
+            videoId: model.providerID,
+            title: model.title,
+            artist: model.artistName,
+            duration: model.duration,
+            thumbnailURL: model.artworkURL
+        )
+        Task { await CatalogService.shared.playTrack(track) }
+    }
     func playSavedTrack(_ model: TrackModel) {
         guard model.provider == "youtube" else { return }
         let track = YouTubeTrack(
