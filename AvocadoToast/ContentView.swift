@@ -12,14 +12,6 @@ struct ContentView: View {
     @ObservedObject private var catalogPlayer = AudioPlayerService.shared
     @ObservedObject private var config = AppConfig.shared
 
-    private var preferredColorScheme: ColorScheme? {
-        switch config.selectedAppearance {
-        case .system: nil
-        case .dark: .dark
-        case .light: .light
-        }
-    }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $coordinator.selection) {
@@ -48,7 +40,6 @@ struct ContentView: View {
             }
         }
         .animation(config.reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: catalogPlayer.currentTrack != nil)
-        .preferredColorScheme(preferredColorScheme)
         .sheet(isPresented: $coordinator.showingNowPlaying) {
             NowPlayingView()
                 .presentationDetents([.large])
