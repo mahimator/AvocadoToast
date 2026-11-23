@@ -322,7 +322,7 @@ struct SearchView: View {
     }
 
     private func saveArtistToLibrary(_ artist: YouTubeChannel) {
-        let providerID = artist.channelId ?? artist.browseId
+        let providerID = artist.channelId ?? artist.title
         let model = ArtistModel(
             id: providerID,
             provider: "youtube",
@@ -330,7 +330,7 @@ struct SearchView: View {
             name: artist.title,
             artworkURL: artist.thumbnailURL,
             genres: [],
-            metadata: ["handle": artist.handle ?? "", "browseId": artist.browseId]
+            metadata: ["handle": artist.handle ?? "", "channelId": artist.channelId ?? ""]
         )
         LibraryService.shared.saveArtist(model)
     }
