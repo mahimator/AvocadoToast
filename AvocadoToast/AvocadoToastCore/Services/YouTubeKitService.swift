@@ -168,6 +168,7 @@ final class YouTubeKitService: ObservableObject {
     // MARK: - Albums and artist pages
 
     func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
+        searchError = nil
         do {
             let json = try await client.search(query: term, client: config.defaultClient)
             return Array(LibraryBrowseParser.parseAlbums(from: json).prefix(limit))
