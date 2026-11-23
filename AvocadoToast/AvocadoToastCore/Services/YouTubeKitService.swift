@@ -76,6 +76,7 @@ final class YouTubeKitService: ObservableObject {
     // MARK: - Typed catalog search
 
     func searchArtists(term: String, limit: Int = 20) async -> [YouTubeChannel] {
+        searchError = nil
         do {
             let json = try await client.search(
                 query: term,
@@ -90,6 +91,7 @@ final class YouTubeKitService: ObservableObject {
     }
 
     func searchPlaylists(term: String, limit: Int = 20) async -> [YouTubePlaylist] {
+        searchError = nil
         do {
             let json = try await client.search(
                 query: term,
