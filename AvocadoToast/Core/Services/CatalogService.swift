@@ -28,16 +28,29 @@ final class CatalogService: ObservableObject {
 
     @Published var savedTracks: [YouTubeTrack] = []
 
+    func refreshSavedTracks() {
+        let library = LibraryService.shared
+        library.refresh()
+        savedTracks = library.savedTracks
+            .filter { $0.provider == "youtube" }
+            .map { item in
+                YouTubeTrack(
+                    videoId: item.providerID.isEmpty ? item.id : item.providerID,
+                    title: item.title,
+                    artist: item.artistName,
+                    duration: item.duration ?? 0,
+                    thumbnailURL: item.artworkURL
+                )
+            }
+    }
+
     func toggleSave(_ track: YouTubeTrack) {
-        if let idx = savedTracks.firstIndex(where: { $0.videoId == track.videoId }) {
-            savedTracks.remove(at: idx)
-        } else {
-            savedTracks.append(track)
-        }
+        LibraryService.shared.toggleSaveYouTubeTrack(track)
+        refreshSavedTracks()
     }
 
     func isSaved(_ track: YouTubeTrack) -> Bool {
-        savedTracks.contains { $0.videoId == track.videoId }
+        LibraryService.shared.isTrackSaved(id: track.videoId, provider: "youtube")
     }
 
     init(youtubeService: YouTubeKitService = .shared,
@@ -46,6 +59,7 @@ final class CatalogService: ObservableObject {
         self.youtubeService = youtubeService
         self.localAudioManager = localAudioManager
         self.audioPlayer = audioPlayer
+        refreshSavedTracks()
     }
 
     // MARK: - Search
