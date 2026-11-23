@@ -178,6 +178,23 @@ final class CatalogService: ObservableObject {
         if audioPlayer.isPlaying { LibraryService.shared.recordPlayed(track) }
     }
 
+    func addToQueue(_ track: YouTubeTrack) {
+        if playbackQueue.isEmpty || audioPlayer.currentTrack == nil {
+            Task { await playTrack(track) }
+            return
+        }
+        playbackQueue.append(track)
+    }
+
+    func playNextInQueue(_ track: YouTubeTrack) {
+        if playbackQueue.isEmpty || audioPlayer.currentTrack == nil {
+            Task { await playTrack(track) }
+            return
+        }
+        let insertion = min(queueIndex + 1, playbackQueue.count)
+        playbackQueue.insert(track, at: insertion)
+    }
+
     func playNext() {
         guard !playbackQueue.isEmpty else { return }
         let nextIndex: Int
@@ -258,6 +275,8 @@ final class CatalogService: ObservableObject {
 
     func stop() {
         audioPlayer.stop()
+        playbackQueue.removeAll()
+        queueIndex = 0
     }
 
     func seek(to time: Double) {
