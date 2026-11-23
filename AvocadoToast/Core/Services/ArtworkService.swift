@@ -10,6 +10,7 @@ import Combine
 import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import CryptoKit
 
 /// Artwork loading service with memory + disk cache.
 /// - Asynchronous, non-blocking loading
@@ -96,6 +97,7 @@ final class ArtworkService: ObservableObject {
 
     func clearCache() {
         memoryCache.removeAllObjects()
+        colorCache.removeAll()
         try? fileManager.removeItem(at: diskCacheURL)
         try? fileManager.createDirectory(at: diskCacheURL, withIntermediateDirectories: true, attributes: nil)
     }
@@ -121,10 +123,10 @@ final class ArtworkService: ObservableObject {
     }
 
     private func diskFileURL(for url: URL) -> URL {
-        let filename = url.absoluteString
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-        return diskCacheURL.appendingPathComponent(filename)
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return diskCacheURL.appendingPathComponent(digest).appendingPathExtension("image")
     }
 
     private func loadFromDisk(url: URL) -> UIImage? {
