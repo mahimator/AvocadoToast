@@ -18,7 +18,6 @@ final class CatalogService: ObservableObject {
     static let shared = CatalogService()
 
     private let youtubeService: YouTubeKitService
-    private let localAudioManager: LocalAudioManager
     private let audioPlayer: AudioPlayerService
 
     @Published var searchResults: [YouTubeTrack] = []
@@ -72,10 +71,8 @@ final class CatalogService: ObservableObject {
     }
 
     init(youtubeService: YouTubeKitService = .shared,
-         localAudioManager: LocalAudioManager = .shared,
          audioPlayer: AudioPlayerService = .shared) {
         self.youtubeService = youtubeService
-        self.localAudioManager = localAudioManager
         self.audioPlayer = audioPlayer
         refreshSavedTracks()
         audioPlayer.onPlaybackFinished = { [weak self] in
@@ -192,11 +189,7 @@ final class CatalogService: ObservableObject {
 
     private func playQueueItem(_ track: YouTubeTrack) async {
         var prepared = track
-        if track.provider == "local" {
-            // Imported files carry their sandbox URL in localFileURL.
-        } else if let localPath = localAudioManager.localFilePath(for: track.videoId) {
-            prepared.localFileURL = localPath
-        } else if prepared.streamURL == nil {
+        if track.provider != "local" && prepared.streamURL == nil {
             prepared.streamURL = await resolveStream(for: prepared)
         }
         await audioPlayer.play(prepared)
