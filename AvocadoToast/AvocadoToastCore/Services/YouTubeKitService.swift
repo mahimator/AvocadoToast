@@ -73,6 +73,36 @@ final class YouTubeKitService: ObservableObject {
         }
     }
 
+    // MARK: - Typed catalog search
+
+    func searchArtists(term: String, limit: Int = 20) async -> [YouTubeChannel] {
+        do {
+            let json = try await client.search(
+                query: term,
+                params: YouTubeSearchFilter.channel.rawValue,
+                client: config.defaultClient
+            )
+            return Array(YouTubeFeedParser.searchResults(in: json).channels.prefix(limit))
+        } catch {
+            searchError = error.localizedDescription
+            return []
+        }
+    }
+
+    func searchPlaylists(term: String, limit: Int = 20) async -> [YouTubePlaylist] {
+        do {
+            let json = try await client.search(
+                query: term,
+                params: YouTubeSearchFilter.playlist.rawValue,
+                client: config.defaultClient
+            )
+            return Array(YouTubeFeedParser.searchResults(in: json).playlists.prefix(limit))
+        } catch {
+            searchError = error.localizedDescription
+            return []
+        }
+    }
+
     // MARK: - Playlist browsing
 
     func fetchPlaylistTracks(playlistID: String, limit: Int = 100) async -> (title: String?, tracks: [YouTubeTrack]) {
