@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @StateObject private var library = LibraryService.shared
+    @ObservedObject private var config = AppConfig.shared
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
     @State private var showingAudioImporter = false
@@ -92,7 +93,7 @@ struct LibraryView: View {
                     .font(.headline)
                     .foregroundStyle(ColorTokens.textPrimary)
                     .frame(width: 42, height: 42)
-                    .background(.regularMaterial, in: Circle())
+                    .background(config.enableGlassEffects ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: Circle())
                     .overlay(Circle().strokeBorder(ColorTokens.separator))
             }
             .accessibilityLabel("Add to library")
