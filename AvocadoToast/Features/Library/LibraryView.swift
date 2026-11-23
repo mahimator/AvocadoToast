@@ -332,24 +332,26 @@ struct NewPlaylistView: View {
 
 private extension LibraryView {
     func playRecentTrack(_ model: RecentTrackModel) {
-        guard model.provider == "youtube" else { return }
         let track = YouTubeTrack(
-            videoId: model.providerID,
+            videoId: model.provider == "local" ? model.id : model.providerID,
             title: model.title,
             artist: model.artistName,
             duration: model.duration,
-            thumbnailURL: model.artworkURL
+            thumbnailURL: model.artworkURL,
+            localFileURL: model.provider == "local" ? model.providerID : nil,
+            provider: model.provider
         )
         Task { await CatalogService.shared.playTrack(track) }
     }
     func playSavedTrack(_ model: TrackModel) {
-        guard model.provider == "youtube" else { return }
         let track = YouTubeTrack(
-            videoId: model.providerID.isEmpty ? model.id : model.providerID,
+            videoId: model.provider == "local" ? model.id : (model.providerID.isEmpty ? model.id : model.providerID),
             title: model.title,
             artist: model.artistName,
             duration: model.duration ?? 0,
-            thumbnailURL: model.artworkURL
+            thumbnailURL: model.artworkURL,
+            localFileURL: model.provider == "local" ? model.providerID : nil,
+            provider: model.provider
         )
         Task { await CatalogService.shared.playTrack(track) }
     }
@@ -372,13 +374,15 @@ private struct LocalPlaylistDetailView: View {
 
     private var queueTracks: [YouTubeTrack] {
         tracks.compactMap { model in
-            guard model.provider == "youtube" else { return nil }
+            guard model.provider == "youtube" || model.provider == "local" else { return nil }
             return YouTubeTrack(
-                videoId: model.providerID.isEmpty ? model.id : model.providerID,
+                videoId: model.provider == "local" ? model.id : (model.providerID.isEmpty ? model.id : model.providerID),
                 title: model.title,
                 artist: model.artistName,
                 duration: model.duration ?? 0,
-                thumbnailURL: model.artworkURL
+                thumbnailURL: model.artworkURL,
+                localFileURL: model.provider == "local" ? model.providerID : nil,
+                provider: model.provider
             )
         }
     }
