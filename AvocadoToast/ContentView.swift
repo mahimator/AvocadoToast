@@ -30,7 +30,7 @@ struct ContentView: View {
             .environmentObject(AppTheme.shared)
             .tint(ColorTokens.accentPrimary)
 
-            if PlayerService.shared.currentTrack != nil {
+            if AudioPlayerService.shared.currentTrack != nil {
                 MiniPlayerView()
                     .padding(.horizontal, 12)
                     .padding(.bottom, 72)
