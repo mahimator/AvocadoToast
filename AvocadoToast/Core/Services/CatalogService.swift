@@ -47,8 +47,8 @@ final class CatalogService: ObservableObject {
     private var homeRequestID: UUID?
     private var playbackRequestID: UUID?
 
-    var canPlayPrevious: Bool { queueIndex > 0 || repeatMode == .all || (shuffleEnabled && !shuffleHistory.isEmpty) }
-    var canPlayNext: Bool { (shuffleEnabled && playbackQueue.count > 1 && (!shuffleDeck.isEmpty || repeatMode == .all)) || queueIndex + 1 < playbackQueue.count || repeatMode == .all }
+    var canPlayPrevious: Bool { shuffleEnabled ? !shuffleHistory.isEmpty : (queueIndex > 0 || repeatMode == .all) }
+    var canPlayNext: Bool { (shuffleEnabled && playbackQueue.count > 1) || queueIndex + 1 < playbackQueue.count || repeatMode == .all }
 
     func refreshSavedTracks() {
         let library = LibraryService.shared
@@ -241,7 +241,7 @@ final class CatalogService: ObservableObject {
         guard !playbackQueue.isEmpty else { return }
         let nextIndex: Int
         if shuffleEnabled && playbackQueue.count > 1 {
-            if shuffleDeck.isEmpty && repeatMode == .all {
+            if shuffleDeck.isEmpty {
                 shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
             }
             guard let shuffledNext = shuffleDeck.first else { return }
@@ -286,10 +286,14 @@ final class CatalogService: ObservableObject {
             return
         }
         let previousIndex: Int
-        if shuffleEnabled, let historic = shuffleHistory.popLast() {
-            shuffleDeck.insert(queueIndex, at: 0)
-            queueIndex = historic
-            Task { await playQueueItem(playbackQueue[queueIndex]) }
+        if shuffleEnabled {
+            if let historic = shuffleHistory.popLast() {
+                shuffleDeck.insert(queueIndex, at: 0)
+                queueIndex = historic
+                Task { await playQueueItem(playbackQueue[queueIndex]) }
+            } else if repeatMode == .all && playbackQueue.count > 1 {
+                Task { await playQueueItem(playbackQueue[queueIndex]) }
+            }
             return
         }
         if queueIndex > 0 {
