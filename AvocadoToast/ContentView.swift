@@ -28,7 +28,6 @@ struct ContentView: View {
                     .tag(NavigationDestination.settings)
             }
             .environment(\.modelContext, modelContext)
-            .environmentObject(AppTheme.shared)
             .tint(ColorTokens.accentPrimary)
 
             if catalogPlayer.currentTrack != nil {
