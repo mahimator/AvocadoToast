@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AVKit
 
 struct NowPlayingView: View {
     @ObservedObject private var player = AudioPlayerService.shared
@@ -214,6 +215,10 @@ struct NowPlayingView: View {
                     .frame(width: 52, height: 42)
             }
             .accessibilityLabel("Open queue")
+            Spacer()
+            AirPlayRoutePicker()
+                .frame(width: 52, height: 42)
+                .accessibilityLabel("AirPlay and audio output")
         }
         .padding(.horizontal, 36)
     }
@@ -336,4 +341,17 @@ private struct QueueSheet: View {
             .frame(width: 48, height: 48)
             .overlay(Image(systemName: "music.note").foregroundStyle(.secondary))
     }
+}
+
+
+private struct AirPlayRoutePicker: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let picker = AVRoutePickerView()
+        picker.tintColor = .white.withAlphaComponent(0.72)
+        picker.activeTintColor = UIColor(ColorTokens.accentPrimary)
+        picker.prioritizesVideoDevices = false
+        return picker
+    }
+
+    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }
