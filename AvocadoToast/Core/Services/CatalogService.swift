@@ -281,7 +281,13 @@ final class CatalogService: ObservableObject {
             resetShuffleState()
             return
         }
-        playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
+        if shuffleEnabled {
+            let currentTrack = playbackQueue[queueIndex]
+            playbackQueue = [currentTrack]
+            queueIndex = 0
+        } else {
+            playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
+        }
         resetShuffleState()
     }
 
