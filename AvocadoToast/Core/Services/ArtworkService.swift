@@ -104,11 +104,16 @@ final class ArtworkService: ObservableObject {
 
     private func download(url: URL) async -> UIImage? {
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode),
-                  !data.isEmpty,
-                  let image = UIImage(data: data) else { return nil }
+            let data: Data
+            if url.isFileURL {
+                data = try Data(contentsOf: url)
+            } else {
+                let (downloaded, response) = try await URLSession.shared.data(from: url)
+                guard let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode) else { return nil }
+                data = downloaded
+            }
+            guard !data.isEmpty, let image = UIImage(data: data) else { return nil }
             return image
         } catch {
             return nil
