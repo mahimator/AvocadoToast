@@ -1,20 +1,33 @@
 AvocadoToast rebuild progress (2026-11-23)
 
 Branch: fuhahh-try
-Current pass: UI repairs, warm visual system, persistence and playback architecture cleanup.
+Focus: coherent functionality, warm UI, persistent library, playback reliability.
 
-Done in this pass:
-* Espresso/olive/butter/toast palette applied.
-* Library UI repaired and empty states refined.
-* Search UI repaired; compile error found by CI and fixed.
-* Theme selection now persists and applies at app root.
-* Search save actions now route into SwiftData.
-* App and LibraryService share the same ModelContainer.
-* Remote audio path now uses AVPlayer, local files retain AVAudioEngine/EQ.
-* GitHub Actions simulator build workflow added.
+Implemented:
+* Warm espresso/avocado/butter/toast palette with functional light/dark/system appearance.
+* Liquid Glass surfaces, settings-backed glass toggle, Reduce Motion support.
+* Home discovery, featured track, recent listening carousel and mood search.
+* Reactive category search for songs, albums, artists and playlists.
+* Debounced search, cancellation, persisted recent searches and stale-request protection.
+* Album/artist/playlist detail entry points and actual playlist browsing with pagination.
+* Unified playback queue, next/previous, shuffle, repeat modes, queue sheet, Play All, Add to Queue and Play Next.
+* Artwork-driven fullscreen ambience with smooth palette changes and fallback when artwork is missing.
+* Synced captions/lyrics sheet with active line, auto-scroll and tap-to-seek.
+* Lock Screen and remote command support, Now Playing metadata/artwork, background audio and AirPlay route picker.
+* Audio-session interruption and headphone-removal handling.
+* Saved songs, separate recently-played history and persistent playlists.
+* Playlist create/rename, song add/remove, reorder and playback.
+* Import local audio files, read metadata, extract artwork, play local tracks and safely delete sandboxed imports.
+* Shared SwiftData container and local library reset.
+* Removed the unused catalog-stream download flow. Catalog downloads are intentionally not supported.
+* CI simulator build workflow.
 
 Verification:
-* First simulator build failed on a ternary with two different opaque SwiftUI view types.
-* That error has been fixed.
-* Follow-up build is currently running. No build-clean claim yet.
-* Physical-device playback and all UI interactions remain unverified.
+* Several simulator builds have passed after individual feature changes.
+* Latest branch changes are still being compiled by CI. Wait for the newest run before calling the branch build-clean.
+* No physical-device validation yet. Playback source resolution, AirPlay, background/lock-screen behavior, captions, file imports and visual fit need testing on an iPhone.
+
+Known limitations:
+* YouTube Music/InnerTube is unofficial and subject to breakage or restrictions.
+* Simulator build does not prove remote audio works on-device.
+* No unit-test target currently exists.
