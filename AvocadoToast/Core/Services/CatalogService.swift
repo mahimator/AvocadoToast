@@ -76,6 +76,8 @@ final class CatalogService: ObservableObject {
         audioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in self?.advanceQueueAfterCompletion() }
         }
+        audioPlayer.onPlaybackNext = { [weak self] in self?.playNext() }
+        audioPlayer.onPlaybackPrevious = { [weak self] in self?.playPrevious() }
     }
 
     // MARK: - Search
