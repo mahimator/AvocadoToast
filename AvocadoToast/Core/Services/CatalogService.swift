@@ -177,9 +177,7 @@ final class CatalogService: ObservableObject {
     func playTrack(_ track: YouTubeTrack) async {
         playbackQueue = [track]
         queueIndex = 0
-        shuffleHistory.removeAll()
-        shuffleDeck.removeAll()
-        shuffleDeck.removeAll()
+        resetShuffleState()
         await playQueueItem(track)
     }
 
@@ -189,7 +187,7 @@ final class CatalogService: ObservableObject {
         guard !tracks.isEmpty else { return }
         playbackQueue = tracks
         queueIndex = min(max(index, 0), tracks.count - 1)
-        shuffleHistory.removeAll()
+        resetShuffleState()
         await playQueueItem(playbackQueue[queueIndex])
     }
 
