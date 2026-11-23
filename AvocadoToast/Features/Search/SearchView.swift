@@ -279,11 +279,32 @@ struct SearchView: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .contextMenu {
+                    Button {
+                        savePlaylistToLibrary(playlist)
+                    } label: {
+                        Label("Save playlist to Library", systemImage: "bookmark")
+                    }
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(ColorTokens.backgroundPrimary)
+    }
+
+    private func savePlaylistToLibrary(_ playlist: YouTubePlaylist) {
+        let model = PlaylistModel(
+            id: playlist.playlistId,
+            name: playlist.title,
+            artworkURL: playlist.thumbnailURL,
+            creator: playlist.channelTitle ?? "YouTube Music",
+            provider: "youtube",
+            providerID: playlist.playlistId,
+            isEditable: false,
+            metadata: ["trackCount": playlist.videoCountText ?? ""]
+        )
+        LibraryService.shared.savePlaylist(model)
     }
 
     private func saveAlbumToLibrary(_ album: ParsedAlbum) {
