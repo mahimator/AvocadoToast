@@ -24,6 +24,7 @@ final class AudioPlayerService: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var errorMessage: String?
+    var onPlaybackFinished: (() -> Void)?
 
     private var audioFile: AVAudioFile?
     private var remoteTimeObserver: Any?
@@ -98,6 +99,7 @@ final class AudioPlayerService: ObservableObject {
                       (notification.object as? AVPlayerItem) === self.remotePlayer.currentItem else { return }
                 self.isPlaying = false
                 self.currentTime = self.duration
+                self.onPlaybackFinished?()
             }
         }
     }
@@ -167,6 +169,7 @@ final class AudioPlayerService: ObservableObject {
                 self.isPlaying = false
                 self.currentTime = self.duration
                 self.stopProgressTimer()
+                self.onPlaybackFinished?()
             }
         }
         playerNode.volume = 1
