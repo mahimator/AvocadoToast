@@ -93,6 +93,11 @@ final class LibraryService: ObservableObject {
         if track.provider == "local" {
             LocalAudioManager.shared.deleteImportedAudio(at: track.providerID)
         }
+        // Keep playlist membership consistent with the library deletion.
+        for playlist in savedPlaylists {
+            playlist.trackIDs.removeAll { $0 == track.id }
+            playlist.tracks.removeAll { $0.id == track.id }
+        }
         context.delete(track)
         save()
         refresh()
