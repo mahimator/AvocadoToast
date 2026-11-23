@@ -115,6 +115,7 @@ final class AudioPlayerService: ObservableObject {
         errorMessage = nil
         currentTime = 0
         duration = 0
+        updateNowPlayingMetadata(for: track)
 
         if let localPath = track.localFileURL, !localPath.isEmpty {
             playLocalFile(at: URL(fileURLWithPath: localPath))
