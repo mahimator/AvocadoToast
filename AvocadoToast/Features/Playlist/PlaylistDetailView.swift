@@ -149,10 +149,8 @@ final class PlaylistDetailViewModel: ObservableObject {
     }
 
     func playAll() {
-        guard let playlist = playlist else { return }
-        if let first = playlist.first {
-            Task { await CatalogService.shared.playTrack(first) }
-        }
+        guard let playlist, !playlist.isEmpty else { return }
+        Task { await CatalogService.shared.playQueue(playlist) }
     }
 
     func toggleSaveAll() {
