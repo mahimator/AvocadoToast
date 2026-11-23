@@ -90,11 +90,6 @@ final class LocalAudioManager: ObservableObject {
         }
     }
 
-    func localFilePath(for id: String) -> String? {
-        let url = audioDir.appendingPathComponent("\(id).m4a")
-        return fileManager.fileExists(atPath: url.path) ? url.path : nil
-    }
-
     func deleteImportedAudio(at path: String) {
         let root = audioDir.standardizedFileURL.path + "/"
         let candidate = URL(fileURLWithPath: path).standardizedFileURL
