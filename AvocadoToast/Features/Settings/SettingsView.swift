@@ -68,8 +68,12 @@ struct SettingsView: View {
             for item in try modelContext.fetch(FetchDescriptor<PlaylistModel>()) { modelContext.delete(item) }
             for item in try modelContext.fetch(FetchDescriptor<RecentTrackModel>()) { modelContext.delete(item) }
             try modelContext.save()
+            if AudioPlayerService.shared.currentTrack?.provider == "local" {
+                CatalogService.shared.stop()
+            }
             LocalAudioManager.shared.clearImportedAudio()
             LibraryService.shared.refresh()
+            CatalogService.shared.refreshSavedTracks()
             resetMessage = "Your local library has been cleared."
         } catch {
             resetMessage = "Could not clear the library: \(error.localizedDescription)"
