@@ -66,6 +66,7 @@ struct SettingsView: View {
             for item in try modelContext.fetch(FetchDescriptor<AlbumModel>()) { modelContext.delete(item) }
             for item in try modelContext.fetch(FetchDescriptor<ArtistModel>()) { modelContext.delete(item) }
             for item in try modelContext.fetch(FetchDescriptor<PlaylistModel>()) { modelContext.delete(item) }
+            for item in try modelContext.fetch(FetchDescriptor<RecentTrackModel>()) { modelContext.delete(item) }
             try modelContext.save()
             LibraryService.shared.refresh()
             resetMessage = "Your local library has been cleared."
