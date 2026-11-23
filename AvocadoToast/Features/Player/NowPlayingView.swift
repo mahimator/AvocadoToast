@@ -385,7 +385,6 @@ private struct LyricsSheet: View {
     @ObservedObject private var player = AudioPlayerService.shared
     @State private var segments: [YouTubeTranscriptSegment] = []
     @State private var isLoading = true
-    @State private var unavailable = false
 
     private var activeIndex: Int? {
         let current = Int(player.currentTime * 1000)
@@ -443,7 +442,7 @@ private struct LyricsSheet: View {
         }
         .task(id: track.videoId) {
             isLoading = true
-            segments = await YouTubeKitService.shared.fetchLyrics(videoId: track.videoId)
+            segments = track.provider == "youtube" ? await YouTubeKitService.shared.fetchLyrics(videoId: track.videoId) : []
             isLoading = false
         }
     }
