@@ -30,6 +30,7 @@ final class CatalogService: ObservableObject {
 
     @Published var homeTracks: [YouTubeTrack] = []
     @Published var isLoadingHome: Bool = false
+    @Published var homeError: String?
 
     // MARK: - Library (local persistence)
 
@@ -165,6 +166,7 @@ final class CatalogService: ObservableObject {
         let requestID = UUID()
         homeRequestID = requestID
         isLoadingHome = true
+        homeError = nil
         defer {
             if homeRequestID == requestID {
                 isLoadingHome = false
@@ -232,6 +234,7 @@ final class CatalogService: ObservableObject {
         } catch {
             guard homeRequestID == requestID else { return }
             homeTracks = []
+            homeError = error.localizedDescription
         }
     }
 
