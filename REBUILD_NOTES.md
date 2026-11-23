@@ -5,22 +5,32 @@ Branch: `fuhahh-try`
 ## Direction
 Native iPhone app. No required desktop companion or production backend. YouTube Music remains the catalog/discovery source, while playback integration must be reviewed separately for technical reliability, licensing, and platform terms. Do not claim metadata access equals playback permission.
 
-## Work completed in this rebuild pass
-- Reworked the root tabs and shared mini-player presentation.
-- Rebuilt Listen/Home around a search entry, featured artwork, catalog cards, mood shortcuts, refresh, and Settings navigation.
-- Added home loading lifecycle state to avoid repeatedly loading the feed on every appearance.
-- Rebuilt Search presentation, connected the Home search entry and mood shortcuts to the shared query, and removed category chips that were not backed by category-specific query behavior.
-- Rebuilt Settings, removed the PC/backend URL controls, and made the library reset action destructive-confirmed and functional for SwiftData entities.
-- Connected mini-player and Now Playing screens to the catalog's AudioPlayerService instead of the disconnected legacy PlayerService.
-- Added elapsed-time updates to the audio engine for the Now Playing slider.
+## Current rebuild work
+- Reworked root tabs and shared mini-player presentation.
+- Rebuilt Listen/Home around search, featured artwork, catalog cards, mood shortcuts, refresh, and Settings navigation.
+- Added home loading lifecycle state.
+- Rebuilt Search and removed unsupported fake category filters.
+- Rebuilt Settings, removed PC/backend URL controls, and added confirmed SwiftData library reset.
+- Connected mini-player and Now Playing to the catalog player state.
+- Added playback progress updates.
+- Established warm espresso, avocado olive, butter, toast, and ivory colors, with dark mode as the default.
+- Made theme selection persistent and wired it to the app's preferred color scheme.
+- Repaired the Library screen and added more human empty states and playlist creation.
+- Connected catalog track saves to SwiftData instead of only keeping them in memory.
+- Unified the app and service persistence contexts through PersistenceController.
+- Split audio playback paths: AVPlayer for remote URLs and AVAudioEngine for local files, so remote URLs are no longer passed to AVAudioFile.
+- Added GitHub Actions iOS Simulator compilation so source changes are checked by a real Xcode build.
+
+## Build verification
+A first CI build was triggered and caught a SwiftUI conditional-view type error in Search. That error has been fixed and a follow-up build is running. Do not mark this pass as build-clean until the latest CI run succeeds.
 
 ## Known work still required
-- Compile the full app in Xcode and fix compiler errors. This environment cannot run Xcode/iOS SDK builds.
-- Validate playback on a physical device. Existing source resolution is unofficial and must not be treated as a guaranteed or permitted playback mechanism.
-- Replace the split catalog/player architecture with a clearly defined single playback state owner, queue persistence, and robust interruption/background/lock-screen behavior.
-- Review all feature buttons and actions in detail screens, Library, Settings, and context menus for real implementation.
-- Add automated tests and an iPhone accessibility/performance pass.
-- Review package licensing before adopting third-party code.
+- Finish CI compile and address any remaining compiler errors.
+- Validate playback on a physical device. The existing source resolver is unofficial and fragile. Metadata access is not a guarantee of permitted or reliable playback.
+- Consolidate catalog/player state, then implement queue behavior, background audio, lock-screen controls, interruption handling, and persistent queue state.
+- Audit detail screens, Library interactions, playlist behavior, settings and context menus. Remove fake controls or connect them to real actions.
+- Add tests and perform accessibility, responsiveness, and iPhone device checks.
+- Review licensing of third-party code before adoption.
 
 ## Honest UI rule
-Never show a control for a capability that is not wired to a real action. If the underlying capability is unavailable or not yet implemented, remove the control or show a clear unavailable state.
+Never show a control for a capability that is not wired to a real action. If a capability is unavailable or not yet implemented, remove the control or show a clear unavailable state.
