@@ -2,42 +2,43 @@
 //  HomeViewModel.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
-//
 
 import Foundation
 import Combine
 
 @MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var tracks: [YouTubeTrack] = []
-    @Published var greeting: String?
-    @Published var isRefreshing: Bool = false
+    @Published private(set) var tracks: [YouTubeTrack] = []
+    @Published private(set) var greeting: String?
+    @Published private(set) var isLoading = false
+    @Published var isRefreshing = false
 
     private let catalogService: CatalogService
+    private var hasLoaded = false
 
     init(catalogService: CatalogService = .shared) {
         self.catalogService = catalogService
-    }
-
-    func onAppear() {
         updateGreeting()
-        Task { await load() }
     }
 
-    func onDisappear() {
-        // No-op for now; home keeps its state
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        hasLoaded = true
+        await load()
     }
 
     func refresh() async {
         isRefreshing = true
         await load()
+        hasLoaded = true
         isRefreshing = false
     }
 
     private func load() async {
+        isLoading = true
         await catalogService.fetchHomeTracks()
-        self.tracks = catalogService.homeTracks
+        tracks = catalogService.homeTracks
+        isLoading = false
     }
 
     private func updateGreeting() {
