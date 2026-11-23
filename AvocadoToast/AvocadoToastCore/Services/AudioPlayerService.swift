@@ -17,7 +17,6 @@ final class AudioPlayerService: ObservableObject {
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
-    private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
     private let remotePlayer = AVPlayer()
 
     @Published var isPlaying = false
@@ -40,12 +39,9 @@ final class AudioPlayerService: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var shouldResumeAfterInterruption = false
 
-    private let eqFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-    @Published var eqGains: [Float] = Array(repeating: 0, count: 10)
 
     private init() {
         setupEngine()
-        setupEQ()
         setupRemoteObservers()
         configureRemoteCommands()
         configureAudioSession()
@@ -64,9 +60,7 @@ final class AudioPlayerService: ObservableObject {
 
     private func setupEngine() {
         engine.attach(playerNode)
-        engine.attach(eqNode)
-        engine.connect(playerNode, to: eqNode, format: nil)
-        engine.connect(eqNode, to: engine.mainMixerNode, format: nil)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
         do {
             try engine.start()
         } catch {
@@ -74,13 +68,7 @@ final class AudioPlayerService: ObservableObject {
         }
     }
 
-    private func setupEQ() {
-        for (index, frequency) in eqFrequencies.enumerated() {
-            eqNode.bands[index].frequency = frequency
-            eqNode.bands[index].gain = eqGains[index]
-            eqNode.bands[index].bypass = false
-        }
-    }
+
 
     private func setupRemoteObservers() {
         remoteTimeObserver = remotePlayer.addPeriodicTimeObserver(
@@ -439,19 +427,9 @@ final class AudioPlayerService: ObservableObject {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
-    func setEQGain(band: Int, gain: Float) {
-        guard band >= 0, band < eqFrequencies.count else { return }
-        let clampedGain = min(12, max(-12, gain))
-        eqGains[band] = clampedGain
-        eqNode.bands[band].gain = clampedGain
-    }
 
-    func setEQPreset(_ preset: EQPreset) {
-        for (index, gain) in preset.gains.enumerated() where index < eqFrequencies.count {
-            eqGains[index] = min(12, max(-12, gain))
-            eqNode.bands[index].gain = eqGains[index]
-        }
-    }
+
+
 
     deinit {
         if let remoteTimeObserver {
