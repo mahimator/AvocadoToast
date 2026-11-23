@@ -2,102 +2,58 @@
 //  MiniPlayerView.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
-//
 
 import SwiftUI
-import AVFoundation
 
-/// Persistent floating mini-player. Shows the current track, playback state,
-/// progress and play/pause. Tap to expand to the full player.
 struct MiniPlayerView: View {
-    @ObservedObject private var player = PlayerService.shared
+    @ObservedObject private var player = AudioPlayerService.shared
     @EnvironmentObject private var coordinator: AppCoordinator
 
     var body: some View {
         Group {
-            if player.currentTrack != nil {
-                miniPlayerContent
-            }
-        }
-    }
-
-    private var miniPlayerContent: some View {
-        HStack(spacing: 12) {
-            // Artwork
-            if let artworkURL = player.currentTrack?.artworkURL {
-                CachedAsyncImage(url: artworkURL, size: CGSize(width: 56, height: 56)) { image in
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        placeholderArtwork
+            if let track = player.currentTrack {
+                HStack(spacing: 12) {
+                    artwork(track)
+                    Button {
+                        coordinator.showingNowPlaying = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .buttonStyle(.plain)
+                    Button { player.togglePlayPause() } label: {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 42, height: 42)
+                            .contentShape(Circle())
+                    }
+                    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 }
-            } else {
-                placeholderArtwork
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.16)))
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
             }
-
-            // Track info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(player.currentTrack?.title ?? "Unknown Track")
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                Text(player.currentTrack?.artistName ?? "Unknown Artist")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 12)
-
-            // Progress
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.25))
-                        .frame(height: 4)
-                    Rectangle()
-                        .fill(Color.accentColor)
-                        .frame(width: max(0, geo.size.width * player.progress), height: 4)
-                }
-            }
-            .frame(height: 4)
-            .onTapGesture { /* seek handled in full player */ }
-
-            // Play/pause
-            Button(action: { player.togglePlayPause() }) {
-                Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            // Next
-            Button(action: { player.nextTrack() }) {
-                Image(systemName: "forward.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Color(.systemBackground).opacity(0.92)
-                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: -4)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            coordinator.showingNowPlaying = true
         }
     }
 
-    private var placeholderArtwork: some View {
-        Rectangle()
-            .fill(Color.secondary.opacity(0.15))
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+    @ViewBuilder
+    private func artwork(_ track: YouTubeTrack) -> some View {
+        if let url = track.thumbnailURL.flatMap({ URL(string: $0) }) {
+            CachedAsyncImage(url: url, size: CGSize(width: 48, height: 48)) { image in
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 10))
+                } else { placeholder }
+            }
+        } else { placeholder }
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.18)).frame(width: 48, height: 48)
     }
 }
