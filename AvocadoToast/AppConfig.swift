@@ -39,7 +39,9 @@ final class AppConfig: ObservableObject {
     @Published var providerTimeout: Double = 15.0
     
     // Appearance
-    @Published var selectedAppearance: Appearance = .dark
+    @Published var selectedAppearance: Appearance = .dark {
+        didSet { persistAppearance() }
+    }
     
     enum Appearance: String, CaseIterable, Identifiable {
         case system = "System"
@@ -53,6 +55,7 @@ final class AppConfig: ObservableObject {
         static let enableGlassEffects = "enableGlassEffects"
         static let reduceMotion = "reduceMotion"
         static let artworkBackgroundEnabled = "artworkBackgroundEnabled"
+        static let selectedAppearance = "selectedAppearance"
     }
     
     private init() {
@@ -65,6 +68,10 @@ final class AppConfig: ObservableObject {
         self.enableGlassEffects = defaults.bool(forKey: Keys.enableGlassEffects)
         self.reduceMotion = defaults.bool(forKey: Keys.reduceMotion)
         self.artworkBackgroundEnabled = defaults.bool(forKey: Keys.artworkBackgroundEnabled)
+        if let savedAppearance = defaults.string(forKey: Keys.selectedAppearance),
+           let appearance = Appearance(rawValue: savedAppearance) {
+            self.selectedAppearance = appearance
+        }
     }
     
     private func persistBackendURL() {
@@ -81,5 +88,9 @@ final class AppConfig: ObservableObject {
     
     private func persistArtworkBackground() {
         UserDefaults.standard.setValue(artworkBackgroundEnabled, forKey: Keys.artworkBackgroundEnabled)
+    }
+
+    private func persistAppearance() {
+        UserDefaults.standard.setValue(selectedAppearance.rawValue, forKey: Keys.selectedAppearance)
     }
 }
