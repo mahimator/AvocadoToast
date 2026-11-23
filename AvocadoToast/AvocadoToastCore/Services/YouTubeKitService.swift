@@ -73,6 +73,43 @@ final class YouTubeKitService: ObservableObject {
         }
     }
 
+    // MARK: - Playlist browsing
+
+    func fetchPlaylistTracks(playlistID: String, limit: Int = 100) async -> (title: String?, tracks: [YouTubeTrack]) {
+        let browseID = YouTubeFeeds.playlistBrowseId(playlistID)
+        do {
+            let json = try await client.browse(browseId: browseID, client: config.defaultClient)
+            let title = playlistTitle(from: json)
+            let rows = LibraryBrowseParser.extractItems(from: json) ?? []
+            let tracks = rows.compactMap { row -> YouTubeTrack? in
+                guard let song = LibraryBrowseParser.parseSong(row) else { return nil }
+                return YouTubeTrack(
+                    videoId: song.videoId,
+                    title: song.title,
+                    artist: song.artists.joined(separator: ", "),
+                    duration: Double(song.duration),
+                    thumbnailURL: song.thumbnailUrl
+                )
+            }
+            return (title, Array(tracks.prefix(limit)))
+        } catch {
+            searchError = "Playlist couldn't be loaded: \(error.localizedDescription)"
+            return (nil, [])
+        }
+    }
+
+    private func playlistTitle(from json: [String: Any]) -> String? {
+        guard let header = json["header"] as? [String: Any] else { return nil }
+        for key in ["musicEditablePlaylistDetailHeaderRenderer", "musicPlaylistHeaderRenderer", "musicDetailHeaderRenderer"] {
+            guard let renderer = header[key] as? [String: Any],
+                  let title = renderer["title"] else { continue }
+            if let text = title as? String, !text.isEmpty { return text }
+            if let runs = title as? [String: Any],
+               let parsed = InnerTubeJSON.runsText(runs), !parsed.isEmpty { return parsed }
+        }
+        return nil
+    }
+
     // MARK: - Recommendations
 
     func recommendations(for videoId: String, limit: Int = 25) async -> [YouTubeTrack] {
