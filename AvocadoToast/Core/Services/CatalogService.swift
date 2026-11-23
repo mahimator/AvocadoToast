@@ -172,6 +172,7 @@ final class CatalogService: ObservableObject {
             prepared.streamURL = await resolveStream(for: prepared)
         }
         await audioPlayer.play(prepared)
+        if audioPlayer.isPlaying { LibraryService.shared.recordPlayed(track) }
     }
 
     func playNext() {
