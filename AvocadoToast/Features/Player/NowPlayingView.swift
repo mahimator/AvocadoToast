@@ -2,52 +2,71 @@
 //  NowPlayingView.swift
 //  AvocadoToast
 //
+//  Full-screen listening room. Ambient colour is derived from the current artwork;
+//  the rest of the app keeps its warm Avocado Toast palette.
+//
 
 import SwiftUI
 
 struct NowPlayingView: View {
     @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var ambientColor: Color = ColorTokens.accentPrimary.opacity(0.22)
 
     var body: some View {
         ZStack {
             backdrop
             VStack(spacing: 0) {
                 topBar
-                Spacer(minLength: 18)
+                Spacer(minLength: 12)
 
                 if let track = player.currentTrack {
                     artwork(for: track)
                         .padding(.horizontal, 26)
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 26)
 
                     trackInfo(track)
                         .padding(.horizontal, 28)
 
                     timeline
                         .padding(.horizontal, 28)
-                        .padding(.top, 26)
+                        .padding(.top, 24)
 
                     playbackButton
-                        .padding(.top, 24)
+                        .padding(.top, 26)
 
                     if let error = player.errorMessage, !error.isEmpty {
                         Text(error)
                             .font(.footnote)
-                            .foregroundStyle(ColorTokens.textSecondary)
+                            .foregroundStyle(.white.opacity(0.78))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 28)
                             .padding(.top, 16)
                     }
                 } else {
                     ContentUnavailableView("Nothing playing", systemImage: "music.note", description: Text("Find a track and let it take over from here."))
-                        .foregroundStyle(ColorTokens.textPrimary)
+                        .foregroundStyle(.white)
                 }
 
-                Spacer(minLength: 28)
+                Spacer(minLength: 24)
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .preferredColorScheme(.dark)
+        .task(id: player.currentTrack?.thumbnailURL) {
+            await updateAmbientColor(for: player.currentTrack?.thumbnailURL)
+        }
+    }
+
+    private func updateAmbientColor(for source: String?) async {
+        guard let source, let url = URL(string: source) else {
+            withAnimation(.easeInOut(duration: 0.6)) { ambientColor = ColorTokens.accentPrimary.opacity(0.22) }
+            return
+        }
+        guard let sampled = await ArtworkService.shared.ambientColor(from: url) else { return }
+        withAnimation(.easeInOut(duration: 0.85)) {
+            ambientColor = sampled
+        }
     }
 
     private var topBar: some View {
@@ -55,10 +74,10 @@ struct NowPlayingView: View {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(ColorTokens.textPrimary)
+                    .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(.thinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(ColorTokens.separator))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.22)))
             }
             .accessibilityLabel("Close player")
             Spacer()
@@ -66,10 +85,10 @@ struct NowPlayingView: View {
                 Text("NOW PLAYING")
                     .font(.system(size: 10, weight: .heavy, design: .rounded))
                     .tracking(2)
-                    .foregroundStyle(ColorTokens.accentPrimary)
+                    .foregroundStyle(ambientColor.opacity(0.95))
                 Text("A little listening room")
                     .font(.caption)
-                    .foregroundStyle(ColorTokens.textSecondary)
+                    .foregroundStyle(.white.opacity(0.72))
             }
             Spacer()
             Color.clear.frame(width: 42, height: 42)
@@ -98,21 +117,21 @@ struct NowPlayingView: View {
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(ColorTokens.textPrimary.opacity(0.09))
+                .strokeBorder(.white.opacity(0.16))
         }
-        .shadow(color: .black.opacity(0.3), radius: 24, y: 12)
+        .shadow(color: ambientColor.opacity(0.35), radius: 30, y: 16)
     }
 
     private func trackInfo(_ track: YouTubeTrack) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(track.title)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(ColorTokens.textPrimary)
+                .foregroundStyle(.white)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(track.artist)
                 .font(.headline)
-                .foregroundStyle(ColorTokens.textSecondary)
+                .foregroundStyle(.white.opacity(0.72))
                 .lineLimit(1)
         }
     }
@@ -126,14 +145,14 @@ struct NowPlayingView: View {
                 ),
                 in: 0...max(player.duration, 1)
             )
-            .tint(ColorTokens.butter)
+            .tint(ambientColor)
             HStack {
                 Text(player.currentTime.formattedDuration)
                 Spacer()
                 Text(player.duration.formattedDuration)
             }
             .font(.caption2.monospacedDigit())
-            .foregroundStyle(ColorTokens.textSecondary)
+            .foregroundStyle(.white.opacity(0.62))
         }
     }
 
@@ -144,8 +163,8 @@ struct NowPlayingView: View {
                 .foregroundStyle(ColorTokens.backgroundPrimary)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 76, height: 76)
-                .background(ColorTokens.butter, in: Circle())
-                .shadow(color: ColorTokens.butter.opacity(0.22), radius: 16, y: 6)
+                .background(ambientColor, in: Circle())
+                .shadow(color: ambientColor.opacity(0.3), radius: 18, y: 7)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play")
@@ -157,28 +176,34 @@ struct NowPlayingView: View {
             .overlay {
                 Image(systemName: "music.note")
                     .font(.system(size: 54, weight: .ultraLight))
-                    .foregroundStyle(ColorTokens.textSecondary)
+                    .foregroundStyle(.white.opacity(0.65))
             }
     }
 
     private var backdrop: some View {
         ZStack {
-            ColorTokens.backgroundPrimary
+            Color(red: 0.055, green: 0.052, blue: 0.045)
+            LinearGradient(
+                colors: [ambientColor.opacity(0.72), ambientColor.opacity(0.18), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             RadialGradient(
-                colors: [ColorTokens.accentPrimary.opacity(0.22), .clear],
+                colors: [ambientColor.opacity(0.45), .clear],
                 center: .top,
-                startRadius: 12,
+                startRadius: 10,
                 endRadius: 520
             )
             RadialGradient(
-                colors: [ColorTokens.toast.opacity(0.12), .clear],
+                colors: [ColorTokens.toast.opacity(0.16), .clear],
                 center: .bottomTrailing,
                 startRadius: 0,
                 endRadius: 360
             )
-            Rectangle().fill(.ultraThinMaterial).opacity(0.15)
+            Rectangle().fill(.ultraThinMaterial).opacity(0.12)
         }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.8), value: ambientColor)
     }
 }
 
