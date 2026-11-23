@@ -22,6 +22,8 @@ final class CatalogService: ObservableObject {
     private let audioPlayer: AudioPlayerService
 
     @Published var searchResults: [YouTubeTrack] = []
+    @Published var artistSearchResults: [YouTubeChannel] = []
+    @Published var playlistSearchResults: [YouTubePlaylist] = []
     @Published var isSearching: Bool = false
     @Published var searchError: String?
 
@@ -84,7 +86,7 @@ final class CatalogService: ObservableObject {
 
     // MARK: - Search
 
-    func search(query: String, type: SearchType? = nil, limit: Int = 25) {
+    func search(query: String, type: SearchType = .songs, limit: Int = 25) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         searchTask?.cancel()
         activeSearchID = nil
@@ -92,6 +94,8 @@ final class CatalogService: ObservableObject {
         guard !trimmed.isEmpty else {
             searchError = nil
             searchResults = []
+            artistSearchResults = []
+            playlistSearchResults = []
             isSearching = false
             return
         }
@@ -101,11 +105,25 @@ final class CatalogService: ObservableObject {
         isSearching = true
         searchError = nil
         searchResults = []
+        artistSearchResults = []
+        playlistSearchResults = []
 
-        searchTask = Task { [weak self, youtubeService] in
-            let results = await youtubeService.search(term: trimmed, limit: limit)
-            guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
-            self.searchResults = results
+        searchTask = Task { [weak self, youtubeService = self.youtubeService] in
+            switch type {
+            case .songs:
+                let results = await youtubeService.search(term: trimmed, limit: limit)
+                guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
+                self.searchResults = results
+            case .artists:
+                let results = await youtubeService.searchArtists(term: trimmed, limit: limit)
+                guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
+                self.artistSearchResults = results
+            case .playlists:
+                let results = await youtubeService.searchPlaylists(term: trimmed, limit: limit)
+                guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
+                self.playlistSearchResults = results
+            }
+            guard let self, self.activeSearchID == requestID else { return }
             self.searchError = youtubeService.searchError
             self.isSearching = false
             self.searchTask = nil
@@ -294,13 +312,16 @@ final class CatalogService: ObservableObject {
 
 // MARK: - Search type
 
-enum SearchType: String, CaseIterable {
-    case songs = "songs"
-    case videos = "videos"
-    case albums = "albums"
-    case artists = "artists"
-    case playlists = "playlists"
-    case all = "all"
+enum SearchType: String, CaseIterable, Identifiable {
+    case songs, artists, playlists
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .songs: "Songs"
+        case .artists: "Artists"
+        case .playlists: "Playlists"
+        }
+    }
 }
 
 // MARK: - Domain track (legacy compatibility)
