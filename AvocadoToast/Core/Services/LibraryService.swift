@@ -128,7 +128,7 @@ final class LibraryService: ObservableObject {
     }
 
     func recordPlayed(_ track: YouTubeTrack) {
-        let provider = "youtube"
+        let provider = track.provider
         let stableID = "\(provider)|\(track.videoId)"
         let now = Date()
         if let existing = recentlyPlayed.first(where: { $0.id == stableID }) {
@@ -142,7 +142,7 @@ final class LibraryService: ObservableObject {
             context.insert(RecentTrackModel(
                 id: stableID,
                 provider: provider,
-                providerID: track.videoId,
+                providerID: track.provider == "local" ? (track.localFileURL ?? track.videoId) : track.videoId,
                 title: track.title,
                 artistName: track.artist,
                 artworkURL: track.thumbnailURL,
