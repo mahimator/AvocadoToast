@@ -12,6 +12,7 @@ struct NowPlayingView: View {
     @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var ambientColor: Color = ColorTokens.accentPrimary.opacity(0.22)
+    @ObservedObject private var config = AppConfig.shared
 
     var body: some View {
         ZStack {
@@ -68,7 +69,7 @@ struct NowPlayingView: View {
             return
         }
         guard let sampled = await ArtworkService.shared.ambientColor(from: url) else { return }
-        withAnimation(.easeInOut(duration: 0.85)) {
+        withAnimation(config.reduceMotion ? nil : .easeInOut(duration: 0.85)) {
             ambientColor = sampled
         }
     }
@@ -207,7 +208,7 @@ struct NowPlayingView: View {
             Rectangle().fill(.ultraThinMaterial).opacity(0.12)
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.8), value: ambientColor)
+        .animation(config.reduceMotion ? nil : .easeInOut(duration: 0.8), value: ambientColor)
     }
 }
 
