@@ -145,6 +145,7 @@ struct LibraryView: View {
                                 in: Capsule()
                             )
                             .overlay(Capsule().strokeBorder(ColorTokens.separator))
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -208,6 +209,7 @@ struct LibraryView: View {
                                 Label("Remove from library", systemImage: "trash")
                             }
                         }
+                    }
                 }
             case .albums:
                 ForEach(library.savedAlbums, id: \.id) { album in
