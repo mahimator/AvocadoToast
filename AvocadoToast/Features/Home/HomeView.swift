@@ -182,6 +182,17 @@ struct HomeView: View {
                     .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button { CatalogService.shared.playNextInQueue(featured) } label: {
+                        Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    }
+                    Button { CatalogService.shared.addToQueue(featured) } label: {
+                        Label("Add to queue", systemImage: "text.badge.plus")
+                    }
+                    Button { CatalogService.shared.toggleSave(featured) } label: {
+                        Label(CatalogService.shared.isSaved(featured) ? "Remove from Library" : "Save to Library",
+                              systemImage: CatalogService.shared.isSaved(featured) ? "heart.slash" : "heart")
+                    }
             }
         }
     }
