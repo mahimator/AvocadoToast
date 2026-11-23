@@ -144,6 +144,16 @@ struct SearchView: View {
                 .buttonStyle(.plain)
                 .contextMenu {
                     Button {
+                        CatalogService.shared.playNextInQueue(track)
+                    } label: {
+                        Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    }
+                    Button {
+                        CatalogService.shared.addToQueue(track)
+                    } label: {
+                        Label("Add to queue", systemImage: "text.badge.plus")
+                    }
+                    Button {
                         CatalogService.shared.toggleSave(track)
                     } label: {
                         Label(
