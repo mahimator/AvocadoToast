@@ -2,8 +2,6 @@
 //  AppTheme.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
-//
 
 import SwiftUI
 import Combine
@@ -26,17 +24,39 @@ final class AppTheme: ObservableObject {
     @Published var colorScheme: AppColorScheme = .system
     @Published var reduceMotion: Bool = false
 
+    private let espresso = Color(red: 23/255, green: 22/255, blue: 18/255)
+    private let warmPaper = Color(red: 239/255, green: 232/255, blue: 216/255)
+    private let olive = Color(red: 174/255, green: 183/255, blue: 124/255)
+    private let ivory = Color(red: 244/255, green: 237/255, blue: 220/255)
+    private let warmInk = Color(red: 57/255, green: 52/255, blue: 43/255)
+
     var resolvedBackgroundPrimary: Color {
-        switch colorScheme { case .light: return Color(red: 240/255, green: 240/255, blue: 245/255); case .dark: return Color(red: 10/255, green: 10/255, blue: 15/255); case .system: return Color(.systemBackground) }
+        switch colorScheme {
+        case .light: warmPaper
+        case .dark: espresso
+        case .system: Color(.systemBackground)
+        }
     }
-    var resolvedTextPrimary: Color { colorScheme == .light ? Color(red: 10/255, green: 10/255, blue: 15/255) : .white }
-    var resolvedTextSecondary: Color { colorScheme == .light ? Color(red: 80/255, green: 80/255, blue: 90/255) : Color.white.opacity(0.6) }
-    var resolvedSurfaceGlass: Color { Color.white.opacity(0.08) }
-    var resolvedSurfaceElevated: Color { Color.white.opacity(0.12) }
-    var resolvedAccentPrimary: Color { Color(red: 239/255, green: 139/255, blue: 87/255) }
-    var resolvedSeparator: Color { Color.white.opacity(0.1) }
-    var resolvedPlayerProgress: Color { Color(red: 239/255, green: 139/255, blue: 87/255) }
-    
+    var resolvedTextPrimary: Color {
+        switch colorScheme {
+        case .light: warmInk
+        case .dark: ivory
+        case .system: Color(.label)
+        }
+    }
+    var resolvedTextSecondary: Color {
+        switch colorScheme {
+        case .light: warmInk.opacity(0.62)
+        case .dark: ivory.opacity(0.62)
+        case .system: Color(.secondaryLabel)
+        }
+    }
+    var resolvedSurfaceGlass: Color { ivory.opacity(colorScheme == .light ? 0.22 : 0.08) }
+    var resolvedSurfaceElevated: Color { ivory.opacity(colorScheme == .light ? 0.38 : 0.12) }
+    var resolvedAccentPrimary: Color { olive }
+    var resolvedSeparator: Color { ivory.opacity(colorScheme == .light ? 0.18 : 0.1) }
+    var resolvedPlayerProgress: Color { Color(red: 224/255, green: 196/255, blue: 142/255) }
+
     var glassOpacity: Double { reduceMotion ? 0.3 : 0.08 }
     var cornerRadius: CGFloat { reduceMotion ? 8 : 16 }
 }
