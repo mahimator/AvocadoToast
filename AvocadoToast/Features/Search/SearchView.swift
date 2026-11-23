@@ -201,6 +201,13 @@ struct SearchView: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .contextMenu {
+                    Button {
+                        saveAlbumToLibrary(album)
+                    } label: {
+                        Label("Save album to Library", systemImage: "square.stack")
+                    }
+                }
             }
         }
         .listStyle(.plain)
@@ -232,6 +239,13 @@ struct SearchView: View {
                         Spacer()
                     }
                     .padding(.vertical, 4)
+                }
+                .contextMenu {
+                    Button {
+                        saveArtistToLibrary(artist)
+                    } label: {
+                        Label("Save artist to Library", systemImage: "person.crop.circle.badge.plus")
+                    }
                 }
             }
         }
@@ -270,6 +284,34 @@ struct SearchView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(ColorTokens.backgroundPrimary)
+    }
+
+    private func saveAlbumToLibrary(_ album: ParsedAlbum) {
+        let model = AlbumModel(
+            id: album.browseId,
+            provider: "youtube",
+            providerID: album.browseId,
+            title: album.title,
+            artistName: album.artist ?? "Unknown Artist",
+            artworkURL: album.thumbnailUrl,
+            trackCount: album.songCount,
+            albumType: "album"
+        )
+        LibraryService.shared.saveAlbum(model)
+    }
+
+    private func saveArtistToLibrary(_ artist: YouTubeChannel) {
+        let providerID = artist.channelId ?? artist.browseId
+        let model = ArtistModel(
+            id: providerID,
+            provider: "youtube",
+            providerID: providerID,
+            name: artist.title,
+            artworkURL: artist.thumbnailURL,
+            genres: [],
+            metadata: ["handle": artist.handle ?? "", "browseId": artist.browseId]
+        )
+        LibraryService.shared.saveArtist(model)
     }
 
     private var searchArtworkPlaceholder: some View {
