@@ -45,6 +45,9 @@ final class CatalogService: ObservableObject {
     private var shuffleHistory: [Int] = []
     private var shuffleDeck: [Int] = []
 
+    var canPlayPrevious: Bool { queueIndex > 0 || repeatMode == .all || (shuffleEnabled && !shuffleHistory.isEmpty) }
+    var canPlayNext: Bool { (shuffleEnabled && playbackQueue.count > 1 && (!shuffleDeck.isEmpty || repeatMode == .all)) || queueIndex + 1 < playbackQueue.count || repeatMode == .all }
+
     func refreshSavedTracks() {
         let library = LibraryService.shared
         library.refresh()
