@@ -210,6 +210,7 @@ final class LibraryService: ObservableObject {
     // MARK: - Playlists
 
     func savePlaylist(_ playlist: PlaylistModel) {
+        guard !savedPlaylists.contains(where: { $0.id == playlist.id && $0.provider == playlist.provider }) else { return }
         context.insert(playlist)
         save()
         refresh()
