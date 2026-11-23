@@ -132,13 +132,31 @@ struct LibraryView: View {
                 }
             case .albums:
                 ForEach(library.savedAlbums, id: \.id) { album in
-                    LibraryRow(title: album.title, subtitle: album.artistName,
-                               artworkURL: album.artworkURL.flatMap(URL.init(string:)))
+                    NavigationLink {
+                        AlbumDetailView(query: album.title)
+                    } label: {
+                        LibraryRow(title: album.title, subtitle: album.artistName,
+                                  artworkURL: album.artworkURL.flatMap(URL.init(string:)))
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) { library.removeAlbum(album) } label: {
+                            Label("Remove album", systemImage: "trash")
+                        }
+                    }
                 }
             case .artists:
                 ForEach(library.savedArtists, id: \.id) { artist in
-                    LibraryRow(title: artist.name, subtitle: artist.genres.joined(separator: ", "),
-                               artworkURL: artist.artworkURL.flatMap(URL.init(string:)))
+                    NavigationLink {
+                        ArtistDetailView(query: artist.name)
+                    } label: {
+                        LibraryRow(title: artist.name, subtitle: artist.genres.joined(separator: ", "),
+                                  artworkURL: artist.artworkURL.flatMap(URL.init(string:)))
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) { library.removeArtist(artist) } label: {
+                            Label("Remove artist", systemImage: "trash")
+                        }
+                    }
                 }
             case .playlists:
                 ForEach(library.savedPlaylists, id: \.id) { playlist in
