@@ -95,8 +95,12 @@ final class LibraryService: ObservableObject {
         }
         // Keep playlist membership consistent with the library deletion.
         for playlist in savedPlaylists {
-            playlist.trackIDs.removeAll { $0 == track.id }
-            playlist.tracks.removeAll { $0.id == track.id }
+            let hasExactRelationship = playlist.tracks.contains { $0.id == track.id && $0.provider == track.provider }
+            let hasProviderConflict = playlist.tracks.contains { $0.id == track.id && $0.provider != track.provider }
+            if hasExactRelationship || !hasProviderConflict {
+                playlist.trackIDs.removeAll { $0 == track.id }
+            }
+            playlist.tracks.removeAll { $0.id == track.id && $0.provider == track.provider }
         }
         context.delete(track)
         save()
