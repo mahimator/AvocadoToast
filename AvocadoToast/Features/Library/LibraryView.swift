@@ -186,7 +186,6 @@ struct LibraryView: View {
                 }
             }
         }
-    }
 
     private var libraryIsEmpty: Bool {
         switch selectedFilter {
@@ -245,7 +244,6 @@ struct LibraryView: View {
                             }
                         }
                     }
-                }
             case .albums:
                 ForEach(library.savedAlbums, id: \.id) { album in
                     NavigationLink {
