@@ -9,6 +9,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var library = LibraryService.shared
+    @ObservedObject private var config = AppConfig.shared
     @EnvironmentObject private var coordinator: AppCoordinator
 
     var body: some View {
@@ -57,7 +58,7 @@ struct HomeView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .background(config.enableGlassEffects ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.12)))
             }
             .accessibilityLabel("Settings")
@@ -80,7 +81,7 @@ struct HomeView: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 16)
             .frame(height: 58)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(config.enableGlassEffects ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.14)))
         }
         .buttonStyle(.plain)
@@ -268,7 +269,7 @@ struct HomeView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
-                .background(.thinMaterial, in: Capsule())
+                .background(config.enableGlassEffects ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
         }
         .buttonStyle(.plain)
