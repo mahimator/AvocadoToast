@@ -287,14 +287,14 @@ final class CatalogService: ObservableObject {
     func toggleShuffle() {
         shuffleEnabled.toggle()
         resetShuffleState()
-        if shuffleEnabled {
-            shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
-        }
     }
 
     private func resetShuffleState() {
         shuffleHistory.removeAll()
         shuffleDeck.removeAll()
+        if shuffleEnabled {
+            shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
+        }
     }
 
     func cycleRepeatMode() {
