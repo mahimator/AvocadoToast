@@ -225,9 +225,14 @@ struct LibraryView: View {
             case .playlists:
                 ForEach(library.savedPlaylists, id: \.id) { playlist in
                     NavigationLink {
-                        LocalPlaylistDetailView(playlist: playlist)
+                        if playlist.provider == "youtube" {
+                            PlaylistDetailView(playlistID: playlist.providerID)
+                        } else {
+                            LocalPlaylistDetailView(playlist: playlist)
+                        }
                     } label: {
-                        LibraryRow(title: playlist.name, subtitle: "\(playlist.trackIDs.count) tracks",
+                        LibraryRow(title: playlist.name,
+                                  subtitle: playlist.provider == "youtube" ? (playlist.metadata["trackCount"] ?? "Playlist") : "\(playlist.trackIDs.count) tracks",
                                   artworkURL: playlist.artworkURL.flatMap(URL.init(string:)))
                     }
                     .contextMenu {
