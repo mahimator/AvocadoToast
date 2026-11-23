@@ -9,7 +9,6 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var library = LibraryService.shared
-    @EnvironmentObject private var theme: AppTheme
     @EnvironmentObject private var coordinator: AppCoordinator
 
     var body: some View {
