@@ -1,36 +1,41 @@
-# AvocadoToast Rebuild Notes
+# Avocado Toast Rebuild Notes
 
 Branch: `fuhahh-try`
 
-## Direction
-Native iPhone app. No required desktop companion or production backend. YouTube Music remains the catalog/discovery source, while playback integration must be reviewed separately for technical reliability, licensing, and platform terms. Do not claim metadata access equals playback permission.
+## Product direction
+Native SwiftUI iPhone music discovery and listening app. The app keeps its own warm espresso, avocado, butter and toast identity. The fullscreen player is a separate listening room whose ambient light is sampled from the current artwork.
 
-## Current rebuild work
-- Reworked root tabs and shared mini-player presentation.
-- Rebuilt Listen/Home around search, featured artwork, catalog cards, mood shortcuts, refresh, and Settings navigation.
-- Added home loading lifecycle state.
-- Rebuilt Search and removed unsupported fake category filters.
-- Rebuilt Settings, removed PC/backend URL controls, and added confirmed SwiftData library reset.
-- Connected mini-player and Now Playing to the catalog player state.
-- Added playback progress updates.
-- Established warm espresso, avocado olive, butter, toast, and ivory colors, with dark mode as the default.
-- Made theme selection persistent and wired it to the app's preferred color scheme.
-- Repaired the Library screen and added more human empty states and playlist creation.
-- Connected catalog track saves to SwiftData instead of only keeping them in memory.
-- Unified the app and service persistence contexts through PersistenceController.
-- Split audio playback paths: AVPlayer for remote URLs and AVAudioEngine for local files, so remote URLs are no longer passed to AVAudioFile.
-- Added GitHub Actions iOS Simulator compilation so source changes are checked by a real Xcode build.
+Catalog metadata and playback are separate concepts. The YouTube Music integration is unofficial and may break or be restricted. Do not imply that catalog metadata access grants permission to play or download audio.
 
-## Build verification
-A first CI build was triggered and caught a SwiftUI conditional-view type error in Search. That error has been fixed and a follow-up build is running. Do not mark this pass as build-clean until the latest CI run succeeds.
+## Implemented in this rebuild pass
+- Home discovery, featured song, recently played, mood search shortcuts, refresh and search launcher.
+- Search categories for songs, albums, artists and playlists, with debouncing, cancellation, persistent recent searches, empty/loading/error states and stale-result protection.
+- Album and artist detail entry points, direct browse for provider IDs when available, and queue-aware track selection.
+- Actual playlist browsing with continuation pagination, duplicate-ID protection and page-count bounds.
+- Shared player state with play/pause, seek, next/previous, shuffle, repeat-one/repeat-all, queue sheet, Play All, Add to Queue and Play Next.
+- Lock Screen / headset / car commands and Now Playing metadata, including artwork and position.
+- Background audio, AirPlay route selection, interruption handling and pausing when personal audio is unplugged.
+- Lyrics/captions sheet with timed active line, auto-scroll and tap-to-seek.
+- Saved tracks, separate recent-play history, album/artist collections and local playlists.
+- Local playlist create, rename, add/remove songs, reorder and Play All.
+- Multi-file local audio import through the iOS file picker, metadata and embedded artwork extraction, sandboxed file storage, local playback, and safe cleanup.
+- Artwork memory/disk caching, artwork-derived ambience, reduced-motion behavior, light/dark/system palette and the glass-effects preference.
+- Shared SwiftData persistence context and local-library reset.
+- GitHub Actions simulator compilation.
 
-## Known work still required
-- Finish CI compile and address any remaining compiler errors.
-- Validate playback on a physical device. The existing source resolver is unofficial and fragile. Metadata access is not a guarantee of permitted or reliable playback.
-- Consolidate catalog/player state, then implement queue behavior, background audio, lock-screen controls, interruption handling, and persistent queue state.
-- Audit detail screens, Library interactions, playlist behavior, settings and context menus. Remove fake controls or connect them to real actions.
-- Add tests and perform accessibility, responsiveness, and iPhone device checks.
-- Review licensing of third-party code before adoption.
+## Deliberate non-goals
+- Downloading catalog streams for offline playback.
+- DRM/content-protection circumvention.
+- Commercial licensing, billing, social messaging, uploads, audio editing, desktop/Android clients or a custom recommendation model.
+- Controls for features that are not actually wired.
 
-## Honest UI rule
-Never show a control for a capability that is not wired to a real action. If a capability is unavailable or not yet implemented, remove the control or show a clear unavailable state.
+## Architecture notes
+- SwiftUI screens consume shared observable services rather than maintaining separate playback state.
+- Catalog service owns search and queue transitions.
+- AudioPlayerService owns AVPlayer/AVAudioEngine, the audio session and system remote commands.
+- LibraryService owns SwiftData library and history operations.
+- LocalAudioManager only imports and manages user-provided files. It is not a catalog downloader.
+- ArtworkService handles remote and sandbox-file images.
+
+## Verification
+GitHub Actions builds the iOS Simulator target. A green simulator build validates compilation only. Physical-device audio, AirPlay, Lock Screen, captions, file import, accessibility and UI appearance still require hands-on verification. Third-party InnerTube behavior is not guaranteed.
