@@ -108,7 +108,7 @@ struct LibraryView: View {
                     providerID: imported.fileURL.path,
                     title: imported.title,
                     artistName: imported.artist,
-                    artworkURL: nil,
+                    artworkURL: imported.artworkURL,
                     duration: imported.duration,
                     isVideo: false,
                     isPlayable: true,
