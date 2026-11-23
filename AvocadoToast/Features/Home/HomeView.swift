@@ -291,8 +291,12 @@ struct HomeView: View {
     }
 
     private var emptySection: some View {
-        ContentUnavailableView("Nothing queued up", systemImage: "music.note", description: Text("Refresh or search to find your first track."))
-            .frame(maxWidth: .infinity)
+        ContentUnavailableView(
+            viewModel.isLoading ? "Finding your soundtrack" : (CatalogService.shared.homeError == nil ? "Nothing queued up" : "Couldn't load discovery"),
+            systemImage: "music.note",
+            description: Text(CatalogService.shared.homeError ?? "Refresh or search to find your first track.")
+        )
+        .frame(maxWidth: .infinity)
     }
 }
 
