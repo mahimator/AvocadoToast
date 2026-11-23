@@ -60,8 +60,9 @@ final class LibraryService: ObservableObject {
     // MARK: - Tracks
 
     func saveTrack(_ track: TrackModel) {
-        // Avoid duplicates by internal id
-        let exists = savedTracks.contains { $0.id == track.id && $0.provider == track.provider }
+        // TrackModel.id is globally unique in SwiftData, so prevent collisions
+        // across providers as well as duplicate saves within one provider.
+        let exists = savedTracks.contains { $0.id == track.id }
         guard !exists else { return }
         context.insert(track)
         save()
@@ -70,11 +71,11 @@ final class LibraryService: ObservableObject {
 
     func saveTracks(_ tracks: [TrackModel]) {
         guard !tracks.isEmpty else { return }
-        let existingKeys = Set(savedTracks.map { "\($0.provider)|\($0.id)" })
-        var inserted = Set<String>()
+        // TrackModel.id has a global unique constraint, not a provider-scoped one.
+        let existingIDs = Set(savedTracks.map(\.id))
+        var insertedIDs = Set<String>()
         for track in tracks {
-            let key = "\(track.provider)|\(track.id)"
-            guard !existingKeys.contains(key), inserted.insert(key).inserted else { continue }
+            guard !existingIDs.contains(track.id), insertedIDs.insert(track.id).inserted else { continue }
             context.insert(track)
         }
         save()
