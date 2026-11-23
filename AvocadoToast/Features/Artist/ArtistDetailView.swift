@@ -55,7 +55,7 @@ struct ArtistDetailView: View {
                     Button(action: {
                         viewModel.toggleSaveAll()
                     }) {
-                        Label(viewModel.isSaved ? "Saved" : "Save", systemImage: viewModel.isSaved ? "checkmark" : "plus")
+                        Label(viewModel.isSaved ? "Tracks saved" : "Save tracks", systemImage: viewModel.isSaved ? "checkmark" : "plus")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
@@ -71,7 +71,7 @@ struct ArtistDetailView: View {
                         ArtistTrackRow(track: track, number: index + 1)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                Task { await CatalogService.shared.playTrack(track) }
+                                Task { await CatalogService.shared.playQueue(tracks, startAt: index) }
                             }
                     }
                 }
@@ -148,20 +148,25 @@ final class ArtistDetailViewModel: ObservableObject {
         let results = await catalogService.searchYouTube(query: query, limit: 20)
         self.tracks = results
         self.artistName = results.first?.artist
+        self.isSaved = !results.isEmpty && results.allSatisfy { catalogService.isSaved($0) }
     }
 
     func playAll() {
-        guard let playlist = tracks else { return }
-        if let first = playlist.first {
-            Task { await CatalogService.shared.playTrack(first) }
-        }
+        guard let tracks, !tracks.isEmpty else { return }
+        Task { await CatalogService.shared.playQueue(tracks) }
     }
 
     func toggleSaveAll() {
-        guard let playlist = tracks else { return }
-        for track in playlist {
-            CatalogService.shared.toggleSave(track)
+        guard let tracks, !tracks.isEmpty else { return }
+        let catalog = CatalogService.shared
+        let allSaved = tracks.allSatisfy { catalog.isSaved($0) }
+        for track in tracks {
+            if allSaved && catalog.isSaved(track) {
+                catalog.toggleSave(track)
+            } else if !allSaved && !catalog.isSaved(track) {
+                catalog.toggleSave(track)
+            }
         }
-        isSaved = CatalogService.shared.isSaved(playlist.first ?? YouTubeTrack(videoId: "", title: "", artist: ""))
+        isSaved = tracks.allSatisfy { catalog.isSaved($0) }
     }
 }
