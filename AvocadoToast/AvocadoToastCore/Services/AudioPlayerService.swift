@@ -226,7 +226,11 @@ final class AudioPlayerService: ObservableObject {
             errorMessage = "Audio session couldn't resume: \(error.localizedDescription)"
             return
         }
-        if isRemotePlayback, remotePlayer.currentItem != nil {
+        if isRemotePlayback, let item = remotePlayer.currentItem {
+            if item.status == .failed, let currentTrack {
+                Task { await play(currentTrack) }
+                return
+            }
             remotePlayer.play()
             isPlaying = true
             updateNowPlayingInfo()
