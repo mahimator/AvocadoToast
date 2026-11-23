@@ -176,7 +176,7 @@ struct LibraryView: View {
                             .padding(.horizontal, 15)
                             .padding(.vertical, 10)
                             .background(
-                                selectedFilter == filter ? ColorTokens.accentMuted : ColorTokens.surfaceGlass,
+                                selectedFilter == filter ? ColorTokens.accentMuted : (config.enableGlassEffects ? ColorTokens.surfaceGlass : ColorTokens.backgroundSecondary),
                                 in: Capsule()
                             )
                             .overlay(Capsule().strokeBorder(ColorTokens.separator))
@@ -204,7 +204,7 @@ struct LibraryView: View {
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(ColorTokens.accentPrimary)
                 .frame(width: 84, height: 84)
-                .background(ColorTokens.surfaceGlass, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .background(config.enableGlassEffects ? ColorTokens.surfaceGlass : ColorTokens.backgroundSecondary, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             Text(selectedFilter.emptyTitle)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(ColorTokens.textPrimary)
