@@ -11,7 +11,7 @@ import AVFoundation
 import UIKit
 import Combine
 
-struct ImportedAudio {
+struct ImportedAudio: Sendable {
     let id: String
     let fileURL: URL
     let title: String
