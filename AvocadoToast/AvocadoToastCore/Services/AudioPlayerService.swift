@@ -2,8 +2,8 @@
 //  AudioPlayerService.swift
 //  AvocadoToast
 //
-//  Real audio playback engine using AVAudioEngine with EQ.
-//  Plays YouTube stream URLs and local downloaded files.
+//  Local files use AVAudioEngine (including the 10-band EQ).
+//  Legitimate remote media URLs use AVPlayer, which supports streaming.
 //
 
 import Foundation
@@ -17,6 +17,7 @@ final class AudioPlayerService: ObservableObject {
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let eqNode = AVAudioUnitEQ(numberOfBands: 10)
+    private let remotePlayer = AVPlayer()
 
     @Published var isPlaying = false
     @Published var currentTrack: YouTubeTrack?
@@ -25,8 +26,10 @@ final class AudioPlayerService: ObservableObject {
     @Published var errorMessage: String?
 
     private var audioFile: AVAudioFile?
-    private var timeObserver: Any?
+    private var remoteTimeObserver: Any?
+    private var finishObserver: NSObjectProtocol?
     private var bufferIsLoaded = false
+    private var isRemotePlayback = false
     private var progressTimer: Timer?
 
     private let eqFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
@@ -35,6 +38,18 @@ final class AudioPlayerService: ObservableObject {
     private init() {
         setupEngine()
         setupEQ()
+        setupRemoteObservers()
+        configureAudioSession()
+    }
+
+    private func configureAudioSession() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
+            try session.setActive(true)
+        } catch {
+            errorMessage = "Audio session setup failed: \(error.localizedDescription)"
+        }
     }
 
     private func setupEngine() {
@@ -42,146 +57,242 @@ final class AudioPlayerService: ObservableObject {
         engine.attach(eqNode)
         engine.connect(playerNode, to: eqNode, format: nil)
         engine.connect(eqNode, to: engine.mainMixerNode, format: nil)
-        do { try engine.start() } catch { errorMessage = "Engine start failed: \(error.localizedDescription)" }
+        do {
+            try engine.start()
+        } catch {
+            errorMessage = "Audio engine start failed: \(error.localizedDescription)"
+        }
     }
 
     private func setupEQ() {
-        for (index, freq) in eqFrequencies.enumerated() {
-            eqNode.bands[index].frequency = freq
-            eqNode.bands[index].gain = 0
+        for (index, frequency) in eqFrequencies.enumerated() {
+            eqNode.bands[index].frequency = frequency
+            eqNode.bands[index].gain = eqGains[index]
             eqNode.bands[index].bypass = false
         }
     }
 
-    func play(_ track: YouTubeTrack) async {
-        stop()
-        currentTrack = track
-        errorMessage = nil
-
-        let url: URL?
-        if let localFileURL = track.localFileURL {
-            url = URL(fileURLWithPath: localFileURL)
-        } else if let streamURL = track.streamURL {
-            url = URL(string: streamURL)
-        } else {
-            errorMessage = "No playable URL for this track"
-            return
+    private func setupRemoteObservers() {
+        remoteTimeObserver = remotePlayer.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in
+                guard let self, self.isRemotePlayback else { return }
+                let seconds = time.seconds
+                if seconds.isFinite { self.currentTime = max(0, seconds) }
+                if let itemDuration = self.remotePlayer.currentItem?.duration.seconds,
+                   itemDuration.isFinite, itemDuration > 0 {
+                    self.duration = itemDuration
+                }
+            }
         }
 
-        guard let url else { errorMessage = "Invalid URL"; return }
-
-        do {
-            let asset = AVAsset(url: url)
-            let status = try await asset.load(.isPlayable)
-            if !status { errorMessage = "Track is not playable"; return }
-            audioFile = try AVAudioFile(forReading: url)
-            duration = Double(audioFile!.length) / audioFile!.processingFormat.sampleRate
-            bufferIsLoaded = true
-            playEngine()
-        } catch {
-            errorMessage = "Failed to load audio: \(error.localizedDescription)"
+        finishObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                guard let self,
+                      notification.object as? AVPlayerItem === self.remotePlayer.currentItem else { return }
+                self.isPlaying = false
+                self.currentTime = self.duration
+            }
         }
     }
 
-    private func playEngine() {
-        guard bufferIsLoaded, let audioFile else { return }
+    func play(_ track: YouTubeTrack) async {
+        stopPlaybackOnly()
+        currentTrack = track
+        errorMessage = nil
+        currentTime = 0
+        duration = 0
+
+        if let localPath = track.localFileURL, !localPath.isEmpty {
+            playLocalFile(at: URL(fileURLWithPath: localPath))
+            return
+        }
+
+        guard let streamURL = track.streamURL,
+              let url = URL(string: streamURL),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            errorMessage = "This track has no valid playback source."
+            return
+        }
+
+        playRemoteURL(url)
+    }
+
+    private func playLocalFile(at url: URL) {
+        guard url.isFileURL else {
+            errorMessage = "Local playback requires a file URL."
+            return
+        }
+        do {
+            let file = try AVAudioFile(forReading: url)
+            audioFile = file
+            duration = Double(file.length) / file.processingFormat.sampleRate
+            bufferIsLoaded = true
+            isRemotePlayback = false
+            playLocalEngine()
+        } catch {
+            audioFile = nil
+            bufferIsLoaded = false
+            errorMessage = "Couldn't open local audio: \(error.localizedDescription)"
+        }
+    }
+
+    private func playRemoteURL(_ url: URL) {
+        isRemotePlayback = true
+        bufferIsLoaded = false
+        audioFile = nil
         playerNode.stop()
-        let finishedTrackID = currentTrack?.id
-        playerNode.scheduleFile(audioFile, at: nil, completionHandler: { [weak self] in
+        let item = AVPlayerItem(url: url)
+        remotePlayer.replaceCurrentItem(with: item)
+        remotePlayer.play()
+        isPlaying = true
+    }
+
+    private func playLocalEngine() {
+        guard bufferIsLoaded, let audioFile else {
+            errorMessage = "The local audio file isn't ready."
+            return
+        }
+        playerNode.stop()
+        let trackID = currentTrack?.videoId
+        playerNode.scheduleFile(audioFile, at: nil) { [weak self] in
             Task { @MainActor in
-                guard let self, self.currentTrack?.id == finishedTrackID else { return }
+                guard let self, self.currentTrack?.videoId == trackID, !self.isRemotePlayback else { return }
                 self.isPlaying = false
                 self.currentTime = self.duration
                 self.stopProgressTimer()
             }
-        })
-        playerNode.volume = 1.0
-        do { try engine.start() } catch { errorMessage = "Engine restart failed: \(error.localizedDescription)"; return }
+        }
+        playerNode.volume = 1
+        do {
+            if !engine.isRunning { try engine.start() }
+        } catch {
+            errorMessage = "Audio engine couldn't restart: \(error.localizedDescription)"
+            return
+        }
         playerNode.play()
         isPlaying = true
         startProgressTimer()
     }
 
     func pause() {
-        playerNode.pause()
+        if isRemotePlayback {
+            remotePlayer.pause()
+        } else {
+            playerNode.pause()
+            updateLocalPlaybackTime()
+        }
         isPlaying = false
         stopProgressTimer()
-        updatePlaybackTime()
     }
 
     func resume() {
-        playerNode.play()
-        isPlaying = true
-        startProgressTimer()
+        guard currentTrack != nil else { return }
+        if isRemotePlayback, remotePlayer.currentItem != nil {
+            remotePlayer.play()
+            isPlaying = true
+        } else if bufferIsLoaded {
+            playerNode.play()
+            isPlaying = true
+            startProgressTimer()
+        } else if let currentTrack {
+            Task { await play(currentTrack) }
+        }
     }
 
     func stop() {
-        playerNode.stop()
-        stopProgressTimer()
-        isPlaying = false
-        bufferIsLoaded = false
-        audioFile = nil
+        stopPlaybackOnly()
         currentTime = 0
         duration = 0
     }
 
+    private func stopPlaybackOnly() {
+        remotePlayer.pause()
+        remotePlayer.replaceCurrentItem(with: nil)
+        playerNode.stop()
+        stopProgressTimer()
+        isPlaying = false
+        bufferIsLoaded = false
+        isRemotePlayback = false
+        audioFile = nil
+    }
+
     func togglePlayPause() {
-        if isPlaying { pause() } else {
-            Task { await play(currentTrack ?? YouTubeTrack(videoId: "", title: "", artist: "")) }
+        if isPlaying {
+            pause()
+        } else {
+            resume()
         }
     }
 
     func seek(to time: Double) {
-        guard let audioFile else { return }
-        let sampleRate = audioFile.processingFormat.sampleRate
-        let frame = AVAudioFramePosition(time * sampleRate)
-        let frameCount = AVAudioFrameCount(audioFile.length - frame)
-        guard frameCount > 0 else { return }
-        playerNode.stop()
-        playerNode.scheduleSegment(audioFile, startingFrame: frame, frameCount: frameCount, at: nil, completionHandler: nil)
-        currentTime = time
-        if isPlaying { playerNode.play() }
-        updatePlaybackTime()
+        let target = min(max(0, time), max(duration, 0))
+        if isRemotePlayback {
+            remotePlayer.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+            currentTime = target
+        } else if let audioFile {
+            let sampleRate = audioFile.processingFormat.sampleRate
+            let frame = AVAudioFramePosition(target * sampleRate)
+            guard frame >= 0, frame < audioFile.length else { return }
+            let remaining = audioFile.length - frame
+            guard remaining > 0 else { return }
+            playerNode.stop()
+            let count = AVAudioFrameCount(remaining)
+            playerNode.scheduleSegment(audioFile, startingFrame: frame, frameCount: count, at: nil, completionHandler: nil)
+            currentTime = target
+            if isPlaying { playerNode.play() }
+            updateLocalPlaybackTime()
+        }
     }
-
 
     private func startProgressTimer() {
         stopProgressTimer()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updatePlaybackTime() }
+            Task { @MainActor in self?.updateLocalPlaybackTime() }
         }
     }
-
 
     private func stopProgressTimer() {
         progressTimer?.invalidate()
         progressTimer = nil
     }
 
-
-    private func updatePlaybackTime() {
-        guard let renderTime = playerNode.lastRenderTime,
-              let nodeTime = playerNode.playerTime(forNodeTime: renderTime) else { return }
-        guard nodeTime.sampleRate > 0 else { return }
+    private func updateLocalPlaybackTime() {
+        guard !isRemotePlayback,
+              let renderTime = playerNode.lastRenderTime,
+              let nodeTime = playerNode.playerTime(forNodeTime: renderTime),
+              nodeTime.sampleRate > 0 else { return }
         currentTime = min(duration, max(0, Double(nodeTime.sampleTime) / nodeTime.sampleRate))
     }
 
-
     func setEQGain(band: Int, gain: Float) {
         guard band >= 0, band < eqFrequencies.count else { return }
-        eqGains[band] = gain
-        eqNode.bands[band].gain = gain
+        let clampedGain = min(12, max(-12, gain))
+        eqGains[band] = clampedGain
+        eqNode.bands[band].gain = clampedGain
     }
 
     func setEQPreset(_ preset: EQPreset) {
-        for (index, gain) in preset.gains.enumerated() {
-            guard index < eqFrequencies.count else { break }
-            eqGains[index] = gain
-            eqNode.bands[index].gain = gain
+        for (index, gain) in preset.gains.enumerated() where index < eqFrequencies.count {
+            eqGains[index] = min(12, max(-12, gain))
+            eqNode.bands[index].gain = eqGains[index]
         }
     }
 
     deinit {
+        if let remoteTimeObserver {
+            remotePlayer.removeTimeObserver(remoteTimeObserver)
+        }
+        if let finishObserver {
+            NotificationCenter.default.removeObserver(finishObserver)
+        }
+        progressTimer?.invalidate()
         playerNode.stop()
         engine.stop()
     }
