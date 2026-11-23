@@ -230,6 +230,23 @@ final class CatalogService: ObservableObject {
         Task { await playQueueItem(playbackQueue[nextIndex]) }
     }
 
+    /// Removes a queued item without disturbing the currently playing item.
+    func removeQueuedTrack(at index: Int) {
+        guard playbackQueue.indices.contains(index), index != queueIndex else { return }
+        playbackQueue.remove(at: index)
+        if index < queueIndex { queueIndex -= 1 }
+    }
+
+    /// Keeps the current item and clears everything scheduled after it.
+    func clearUpcoming() {
+        guard playbackQueue.indices.contains(queueIndex) else {
+            playbackQueue.removeAll()
+            queueIndex = 0
+            return
+        }
+        playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
+    }
+
     func playPrevious() {
         guard !playbackQueue.isEmpty else { return }
         if audioPlayer.currentTime > 3 {
