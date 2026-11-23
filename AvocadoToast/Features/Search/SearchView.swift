@@ -33,7 +33,11 @@ struct SearchView: View {
                     } else if let error = CatalogService.shared.searchError, !error.isEmpty {
                         ContentUnavailableView("Couldn't find a slice of that", systemImage: "wifi.exclamationmark", description: Text(error))
                     } else if query.isEmpty {
-                        recentSearches.isEmpty ? searchPrompt : recentSearchesView
+                        if recentSearches.isEmpty {
+                            searchPrompt
+                        } else {
+                            recentSearchesView
+                        }
                     } else if CatalogService.shared.searchResults.isEmpty {
                         ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try another artist, track or album."))
                     } else {
