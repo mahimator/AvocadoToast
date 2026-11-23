@@ -14,6 +14,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var ambientColor: Color = ColorTokens.accentPrimary.opacity(0.22)
     @State private var showingQueue = false
+    @State private var showingLyrics = false
     @ObservedObject private var catalog = CatalogService.shared
     @ObservedObject private var config = AppConfig.shared
 
@@ -42,6 +43,8 @@ struct NowPlayingView: View {
                             .padding(.top, 26)
                         secondaryControls
                             .padding(.top, 18)
+                        lyricsButton
+                            .padding(.top, 16)
 
                         if let error = player.errorMessage, !error.isEmpty {
                             Text(error)
@@ -70,6 +73,13 @@ struct NowPlayingView: View {
             QueueSheet()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingLyrics) {
+            if let track = player.currentTrack {
+                LyricsSheet(track: track)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -223,6 +233,19 @@ struct NowPlayingView: View {
         .padding(.horizontal, 36)
     }
 
+    private var lyricsButton: some View {
+        Button { showingLyrics = true } label: {
+            Label("Lyrics", systemImage: "quote.bubble")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.86))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
+                .background(.thinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func playerSkipButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -354,4 +377,74 @@ private struct AirPlayRoutePicker: UIViewRepresentable {
     }
 
     func updateUIView(_ view: AVRoutePickerView, context: Context) {}
+}
+
+
+private struct LyricsSheet: View {
+    let track: YouTubeTrack
+    @ObservedObject private var player = AudioPlayerService.shared
+    @State private var segments: [YouTubeTranscriptSegment] = []
+    @State private var isLoading = true
+    @State private var unavailable = false
+
+    private var activeIndex: Int? {
+        let current = Int(player.currentTime * 1000)
+        return segments.lastIndex(where: { $0.startMilliseconds <= current })
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Looking for lyrics…")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if segments.isEmpty {
+                    ContentUnavailableView(
+                        "Lyrics unavailable",
+                        systemImage: "quote.bubble",
+                        description: Text("This track doesn't have accessible captions right now.")
+                    )
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 16) {
+                                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                                    Button {
+                                        player.seek(to: Double(segment.startMilliseconds) / 1000)
+                                    } label: {
+                                        Text(segment.text)
+                                            .font(.system(size: 21, weight: index == activeIndex ? .semibold : .medium, design: .rounded))
+                                            .foregroundStyle(index == activeIndex ? ColorTokens.textPrimary : ColorTokens.textSecondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .id(index)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 26)
+                        }
+                        .onChange(of: activeIndex) { _, index in
+                            guard let index, player.isPlaying else { return }
+                            withAnimation(AppConfig.shared.reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(index, anchor: .center)
+                            }
+                        }
+                    }
+                }
+            }
+            .background(ColorTokens.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle(track.title)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .task(id: track.videoId) {
+            isLoading = true
+            segments = await YouTubeKitService.shared.fetchLyrics(videoId: track.videoId)
+            isLoading = false
+        }
+    }
 }
