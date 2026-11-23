@@ -50,7 +50,7 @@ final class ArtworkService: ObservableObject {
 
         // 2. Disk cache
         if let diskImage = loadFromDisk(url: url) {
-            memoryCache.setObject(diskImage, forKey: url as NSURL)
+            cacheInMemory(diskImage, for: url)
             return resize(diskImage, to: size)
         }
 
@@ -58,7 +58,7 @@ final class ArtworkService: ObservableObject {
         guard let image = await download(url: url) else { return nil }
 
         // Cache (memory + disk) off the actor
-        memoryCache.setObject(image, forKey: url as NSURL)
+        cacheInMemory(image, for: url)
         saveToDisk(image: image, url: url)
 
         return resize(image, to: size)
@@ -120,6 +120,11 @@ final class ArtworkService: ObservableObject {
         } catch {
             return nil
         }
+    }
+
+    private func cacheInMemory(_ image: UIImage, for url: URL) {
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        memoryCache.setObject(image, forKey: url as NSURL, cost: cost)
     }
 
     private func diskFileURL(for url: URL) -> URL {
