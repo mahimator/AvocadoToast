@@ -27,6 +27,7 @@ final class AudioPlayerService: ObservableObject {
     private var audioFile: AVAudioFile?
     private var timeObserver: Any?
     private var bufferIsLoaded = false
+    private var progressTimer: Timer?
 
     private let eqFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
     @Published var eqGains: [Float] = Array(repeating: 0, count: 10)
@@ -85,25 +86,38 @@ final class AudioPlayerService: ObservableObject {
     private func playEngine() {
         guard bufferIsLoaded, let audioFile else { return }
         playerNode.stop()
-        playerNode.scheduleFile(audioFile, at: nil, completionHandler: nil)
+        let finishedTrackID = currentTrack?.id
+        playerNode.scheduleFile(audioFile, at: nil, completionHandler: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.currentTrack?.id == finishedTrackID else { return }
+                self.isPlaying = false
+                self.currentTime = self.duration
+                self.stopProgressTimer()
+            }
+        })
         playerNode.volume = 1.0
         do { try engine.start() } catch { errorMessage = "Engine restart failed: \(error.localizedDescription)"; return }
         playerNode.play()
         isPlaying = true
+        startProgressTimer()
     }
 
     func pause() {
         playerNode.pause()
         isPlaying = false
+        stopProgressTimer()
+        updatePlaybackTime()
     }
 
     func resume() {
         playerNode.play()
         isPlaying = true
+        startProgressTimer()
     }
 
     func stop() {
         playerNode.stop()
+        stopProgressTimer()
         isPlaying = false
         bufferIsLoaded = false
         audioFile = nil
@@ -127,7 +141,31 @@ final class AudioPlayerService: ObservableObject {
         playerNode.scheduleSegment(audioFile, startingFrame: frame, frameCount: frameCount, at: nil, completionHandler: nil)
         currentTime = time
         if isPlaying { playerNode.play() }
+        updatePlaybackTime()
     }
+
+
+    private func startProgressTimer() {
+        stopProgressTimer()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updatePlaybackTime() }
+        }
+    }
+
+
+    private func stopProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+    }
+
+
+    private func updatePlaybackTime() {
+        guard let renderTime = playerNode.lastRenderTime,
+              let nodeTime = playerNode.playerTime(forNodeTime: renderTime) else { return }
+        guard nodeTime.sampleRate > 0 else { return }
+        currentTime = min(duration, max(0, Double(nodeTime.sampleTime) / nodeTime.sampleRate))
+    }
+
 
     func setEQGain(band: Int, gain: Float) {
         guard band >= 0, band < eqFrequencies.count else { return }
