@@ -16,39 +16,43 @@ struct NowPlayingView: View {
     var body: some View {
         ZStack {
             backdrop
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: 12)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    topBar
+                        .padding(.bottom, 20)
 
-                if let track = player.currentTrack {
-                    artwork(for: track)
-                        .padding(.horizontal, 26)
-                        .padding(.bottom, 26)
+                    if let track = player.currentTrack {
+                        artwork(for: track)
+                            .frame(maxWidth: 360)
+                            .padding(.horizontal, 26)
+                            .padding(.bottom, 26)
 
-                    trackInfo(track)
-                        .padding(.horizontal, 28)
-
-                    timeline
-                        .padding(.horizontal, 28)
-                        .padding(.top, 24)
-
-                    playbackButton
-                        .padding(.top, 26)
-
-                    if let error = player.errorMessage, !error.isEmpty {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .multilineTextAlignment(.center)
+                        trackInfo(track)
                             .padding(.horizontal, 28)
-                            .padding(.top, 16)
-                    }
-                } else {
-                    ContentUnavailableView("Nothing playing", systemImage: "music.note", description: Text("Find a track and let it take over from here."))
-                        .foregroundStyle(.white)
-                }
 
-                Spacer(minLength: 24)
+                        timeline
+                            .padding(.horizontal, 28)
+                            .padding(.top, 24)
+
+                        playbackButton
+                            .padding(.top, 26)
+
+                        if let error = player.errorMessage, !error.isEmpty {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.78))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 28)
+                                .padding(.top, 16)
+                        }
+                    } else {
+                        ContentUnavailableView("Nothing playing", systemImage: "music.note", description: Text("Find a track and let it take over from here."))
+                            .foregroundStyle(.white)
+                            .padding(.top, 80)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 36)
             }
         }
         .ignoresSafeArea(edges: .bottom)
