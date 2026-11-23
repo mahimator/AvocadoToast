@@ -159,6 +159,7 @@ final class YouTubeKitService: ObservableObject {
 struct YouTubeTrack: Identifiable, Equatable, Hashable {
     let id: String
     let videoId: String
+    var provider: String
     let title: String
     let artist: String
     let duration: Double
@@ -169,9 +170,10 @@ struct YouTubeTrack: Identifiable, Equatable, Hashable {
 
     init(videoId: String, title: String, artist: String, duration: Double = 0,
          thumbnailURL: String? = nil, streamURL: String? = nil,
-         isDownloaded: Bool = false, localFileURL: String? = nil) {
+         isDownloaded: Bool = false, localFileURL: String? = nil, provider: String = "youtube") {
         self.id = videoId
         self.videoId = videoId
+        self.provider = provider
         self.title = title
         self.artist = artist
         self.duration = duration
