@@ -298,6 +298,5 @@ struct HomeView: View {
 #Preview {
     HomeView()
         .environmentObject(AppCoordinator())
-        .environmentObject(AppTheme.shared)
 }
 
