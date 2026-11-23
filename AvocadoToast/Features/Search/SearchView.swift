@@ -62,7 +62,11 @@ struct SearchView: View {
             }
             .onChange(of: query) { _, value in
                 coordinator.searchQuery = value
-                viewModel.debounceSearch(value, type: selectedCategory)
+                if value.isEmpty {
+                    viewModel.cancelSearch()
+                } else {
+                    viewModel.debounceSearch(value, type: selectedCategory)
+                }
             }
             .onChange(of: selectedCategory) { _, category in
                 if !query.isEmpty { viewModel.searchNow(query, type: category) }
@@ -385,6 +389,12 @@ final class SearchViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             searchNow(text, type: type)
         }
+    }
+
+    func cancelSearch() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        searchService.cancelSearch()
     }
 
     func searchNow(_ text: String, type: SearchType = .songs) {
