@@ -22,7 +22,7 @@ final class LibraryService: ObservableObject {
     @Published private(set) var savedAlbums: [AlbumModel] = []
     @Published private(set) var savedArtists: [ArtistModel] = []
     @Published private(set) var savedPlaylists: [PlaylistModel] = []
-    @Published private(set) var recentlyPlayed: [TrackModel] = []
+    @Published private(set) var recentlyPlayed: [RecentTrackModel] = []
 
     init(context: ModelContext? = nil) {
         if let context {
@@ -49,8 +49,8 @@ final class LibraryService: ObservableObject {
             savedPlaylists = try context.fetch(FetchDescriptor<PlaylistModel>(
                 sortBy: [SortDescriptor(\PlaylistModel.updatedAt, order: .reverse)]
             ))
-            recentlyPlayed = try context.fetch(FetchDescriptor<TrackModel>(
-                sortBy: [SortDescriptor(\TrackModel.lastPlayedAt, order: .reverse)]
+            recentlyPlayed = try context.fetch(FetchDescriptor<RecentTrackModel>(
+                sortBy: [SortDescriptor(\RecentTrackModel.lastPlayedAt, order: .reverse)]
             ))
         } catch {
             print("LibraryService refresh failed: \(error)")
@@ -127,11 +127,37 @@ final class LibraryService: ObservableObject {
         }
     }
 
-    func recordPlayed(_ track: TrackModel) {
-        track.lastPlayedAt = Date()
-        track.playCount += 1
+    func recordPlayed(_ track: YouTubeTrack) {
+        let provider = "youtube"
+        let stableID = "\(provider)|\(track.videoId)"
+        let now = Date()
+        if let existing = recentlyPlayed.first(where: { $0.id == stableID }) {
+            existing.lastPlayedAt = now
+            existing.playCount += 1
+            existing.title = track.title
+            existing.artistName = track.artist
+            existing.artworkURL = track.thumbnailURL
+            existing.duration = track.duration
+        } else {
+            context.insert(RecentTrackModel(
+                id: stableID,
+                provider: provider,
+                providerID: track.videoId,
+                title: track.title,
+                artistName: track.artist,
+                artworkURL: track.thumbnailURL,
+                duration: track.duration,
+                lastPlayedAt: now
+            ))
+        }
         save()
         refresh()
+        // Keep history bounded to the most recent 100 unique tracks.
+        if recentlyPlayed.count > 100 {
+            for stale in recentlyPlayed.dropFirst(100) { context.delete(stale) }
+            save()
+            refresh()
+        }
     }
 
     // MARK: - Albums
