@@ -39,7 +39,7 @@ struct MiniPlayerView: View {
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 }
                 .padding(10)
-                .background(config.enableGlassEffects ? ColorTokens.surfaceGlass : ColorTokens.backgroundSecondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(config.enableGlassEffects ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .strokeBorder(ColorTokens.textPrimary.opacity(0.08))
