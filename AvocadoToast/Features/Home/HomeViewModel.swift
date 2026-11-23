@@ -15,6 +15,7 @@ final class HomeViewModel: ObservableObject {
 
     private let catalogService: CatalogService
     private var hasLoaded = false
+    private var activeLoadID: UUID?
 
     init(catalogService: CatalogService = .shared) {
         self.catalogService = catalogService
@@ -35,10 +36,14 @@ final class HomeViewModel: ObservableObject {
     }
 
     private func load() async {
+        let requestID = UUID()
+        activeLoadID = requestID
         isLoading = true
         await catalogService.fetchHomeTracks()
+        guard activeLoadID == requestID else { return }
         tracks = catalogService.homeTracks
         isLoading = false
+        activeLoadID = nil
     }
 
     private func updateGreeting() {
