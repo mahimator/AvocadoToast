@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import AVFoundation
+import SwiftyTube
 
 @MainActor
 final class YouTubeKitService: ObservableObject {

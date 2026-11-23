@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import SwiftyTube
 
 enum QueueRepeatMode: String, CaseIterable {
     case off, all, one

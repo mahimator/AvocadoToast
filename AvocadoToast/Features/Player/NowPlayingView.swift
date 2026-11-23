@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftyTube
 import AVKit
 
 struct NowPlayingView: View {

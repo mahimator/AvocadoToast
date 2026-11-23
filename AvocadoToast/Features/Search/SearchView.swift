@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import SwiftyTube
 
 struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
