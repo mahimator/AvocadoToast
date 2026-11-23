@@ -172,19 +172,67 @@ final class CatalogService: ObservableObject {
             }
         }
 
-        let trending = ["new music", "popular songs", "new releases"]
-        let service = youtubeService
-        let results = await withTaskGroup(of: (Int, [YouTubeTrack]).self) { group in
-            for (index, term) in trending.enumerated() {
-                group.addTask { (index, await service.search(term: term, limit: 10)) }
+        // Avocado Toast is not a YouTube Music clone. Use the real Music Home
+        // feed as a discovery source, then curate its shelves into one small,
+        // music-first pool instead of replacing the screen with YTM's layout.
+        do {
+            let json = try await youtubeService.fetchMusicHome()
+            guard homeRequestID == requestID else { return }
+
+            let shelves = YouTubeFeedParser.shelves(in: json)
+            let excludedShelfTerms = ["shorts", "podcast", "news", "gaming", "kids", "live"]
+            let preferredShelfTerms = [
+                "mix", "quick picks", "recommended", "for you", "listen again",
+                "new music", "new releases", "music", "song", "album", "playlist", "radio"
+            ]
+
+            let filteredShelves = shelves.filter { shelf in
+                let title = (shelf.title ?? "").lowercased()
+                return !excludedShelfTerms.contains(where: title.contains)
             }
-            var batches: [(Int, [YouTubeTrack])] = []
-            for await batch in group { batches.append(batch) }
-            return batches.sorted { $0.0 < $1.0 }.flatMap { $0.1 }
+            let preferredShelves = filteredShelves.filter { shelf in
+                let title = (shelf.title ?? "").lowercased()
+                return preferredShelfTerms.contains(where: title.contains)
+            }
+            let sourceShelves = preferredShelves.isEmpty ? filteredShelves : preferredShelves
+
+            var candidates: [YouTubeTrack] = []
+            for shelf in sourceShelves {
+                for video in shelf.videos where !video.isShort && !video.isLive {
+                    let title = video.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !title.isEmpty, !video.videoId.isEmpty else { continue }
+                    candidates.append(YouTubeTrack(
+                        videoId: video.videoId,
+                        title: title,
+                        artist: video.channelTitle ?? "Unknown Artist",
+                        duration: video.durationSeconds.map { Double($0) } ?? 0,
+                        thumbnailURL: video.thumbnailURL
+                    ))
+                }
+            }
+
+            // Some Home responses expose video renderers without shelf wrappers.
+            // Keep that as a fallback, still sourced from the actual Home feed.
+            if candidates.isEmpty {
+                candidates = YouTubeFeedParser.videos(in: json)
+                    .filter { !$0.isShort && !$0.isLive && !$0.videoId.isEmpty && !$0.title.isEmpty }
+                    .map { video in
+                        YouTubeTrack(
+                            videoId: video.videoId,
+                            title: video.title,
+                            artist: video.channelTitle ?? "Unknown Artist",
+                            duration: video.durationSeconds.map { Double($0) } ?? 0,
+                            thumbnailURL: video.thumbnailURL
+                        )
+                    }
+            }
+
+            var seen = Set<String>()
+            homeTracks = candidates.filter { seen.insert($0.videoId).inserted }.prefix(36).map { $0 }
+        } catch {
+            guard homeRequestID == requestID else { return }
+            homeTracks = []
         }
-        guard homeRequestID == requestID else { return }
-        var seen = Set<String>()
-        homeTracks = results.filter { seen.insert($0.id).inserted }
     }
 
     // MARK: - Stream resolution & playback
