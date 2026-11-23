@@ -183,7 +183,11 @@ struct NowPlayingView: View {
 
     private var playbackControls: some View {
         HStack(spacing: 28) {
-            playerSkipButton(symbol: "backward.fill", label: "Previous track") {
+            playerSkipButton(
+                symbol: "backward.fill",
+                label: "Previous track",
+                disabled: player.currentTime <= 3 && catalog.queueIndex == 0 && catalog.repeatMode != .all
+            ) {
                 catalog.playPrevious()
             }
             Button { player.togglePlayPause() } label: {
@@ -197,7 +201,11 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play")
-            playerSkipButton(symbol: "forward.fill", label: "Next track") {
+            playerSkipButton(
+                symbol: "forward.fill",
+                label: "Next track",
+                disabled: catalog.queueIndex >= catalog.playbackQueue.count - 1 && !catalog.shuffleEnabled && catalog.repeatMode != .all
+            ) {
                 catalog.playNext()
             }
         }
@@ -246,17 +254,20 @@ struct NowPlayingView: View {
         .buttonStyle(.plain)
     }
 
-    private func playerSkipButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+    private func playerSkipButton(symbol: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.white.opacity(0.88))
                 .frame(width: 48, height: 48)
+                .opacity(disabled ? 0.3 : 1)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
         .accessibilityLabel(label)
     }
+
 
     private var artworkPlaceholder: some View {
         RoundedRectangle(cornerRadius: 30, style: .continuous)
