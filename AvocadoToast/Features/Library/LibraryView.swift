@@ -197,7 +197,7 @@ struct LibraryView: View {
             case .albums:
                 ForEach(library.savedAlbums, id: \.id) { album in
                     NavigationLink {
-                        AlbumDetailView(query: album.title)
+                        AlbumDetailView(query: album.providerID.isEmpty ? album.title : album.providerID)
                     } label: {
                         LibraryRow(title: album.title, subtitle: album.artistName,
                                   artworkURL: album.artworkURL.flatMap(URL.init(string:)))
