@@ -170,20 +170,6 @@ struct NowPlayingView: View {
         }
     }
 
-    private var playbackButton: some View {
-        Button { player.togglePlayPause() } label: {
-            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(ColorTokens.backgroundPrimary)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 76, height: 76)
-                .background(ambientColor, in: Circle())
-                .shadow(color: ambientColor.opacity(0.3), radius: 18, y: 7)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play")
-    }
-
     private var playbackControls: some View {
         HStack(spacing: 28) {
             playerSkipButton(symbol: "backward.fill", label: "Previous track") {
