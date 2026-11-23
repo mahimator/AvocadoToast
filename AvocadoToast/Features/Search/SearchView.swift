@@ -81,6 +81,7 @@ struct SearchView: View {
     private var hasResults: Bool {
         switch selectedCategory {
         case .songs: !CatalogService.shared.searchResults.isEmpty
+        case .albums: !CatalogService.shared.albumSearchResults.isEmpty
         case .artists: !CatalogService.shared.artistSearchResults.isEmpty
         case .playlists: !CatalogService.shared.playlistSearchResults.isEmpty
         }
@@ -90,6 +91,7 @@ struct SearchView: View {
     private var searchResultsView: some View {
         switch selectedCategory {
         case .songs: songsResults
+        case .albums: albumsResults
         case .artists: artistsResults
         case .playlists: playlistsResults
         }
@@ -164,6 +166,38 @@ struct SearchView: View {
             Spacer()
         }
         .padding(.top, 20)
+    }
+
+    private var albumsResults: some View {
+        List {
+            ForEach(CatalogService.shared.albumSearchResults, id: \.browseId) { album in
+                NavigationLink {
+                    AlbumDetailView(query: album.browseId)
+                } label: {
+                    HStack(spacing: 12) {
+                        if let url = album.thumbnailUrl.flatMap(URL.init(string:)) {
+                            CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
+                                if let image {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                } else { searchArtworkPlaceholder }
+                            }
+                        } else { searchArtworkPlaceholder }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(album.title).font(.body.weight(.semibold)).lineLimit(2)
+                            Text(album.artist ?? album.albumTypeDescription)
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ColorTokens.backgroundPrimary)
     }
 
     private var artistsResults: some View {
