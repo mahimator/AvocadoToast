@@ -211,7 +211,7 @@ struct LibraryView: View {
             case .artists:
                 ForEach(library.savedArtists, id: \.id) { artist in
                     NavigationLink {
-                        ArtistDetailView(query: artist.name)
+                        ArtistDetailView(query: artist.providerID.isEmpty ? artist.name : artist.providerID)
                     } label: {
                         LibraryRow(title: artist.name, subtitle: artist.genres.joined(separator: ", "),
                                   artworkURL: artist.artworkURL.flatMap(URL.init(string:)))
