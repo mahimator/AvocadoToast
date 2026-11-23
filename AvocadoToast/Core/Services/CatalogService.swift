@@ -42,6 +42,7 @@ final class CatalogService: ObservableObject {
 
     private var searchTask: Task<Void, Never>?
     private var activeSearchID: UUID?
+    private var shuffleHistory: [Int] = []
 
     func refreshSavedTracks() {
         let library = LibraryService.shared
@@ -175,6 +176,7 @@ final class CatalogService: ObservableObject {
     func playTrack(_ track: YouTubeTrack) async {
         playbackQueue = [track]
         queueIndex = 0
+        shuffleHistory.removeAll()
         await playQueueItem(track)
     }
 
@@ -184,6 +186,7 @@ final class CatalogService: ObservableObject {
         guard !tracks.isEmpty else { return }
         playbackQueue = tracks
         queueIndex = min(max(index, 0), tracks.count - 1)
+        shuffleHistory.removeAll()
         await playQueueItem(playbackQueue[queueIndex])
     }
 
@@ -202,6 +205,7 @@ final class CatalogService: ObservableObject {
             return
         }
         playbackQueue.append(track)
+        shuffleHistory.removeAll()
     }
 
     func playNextInQueue(_ track: YouTubeTrack) {
@@ -211,6 +215,7 @@ final class CatalogService: ObservableObject {
         }
         let insertion = min(queueIndex + 1, playbackQueue.count)
         playbackQueue.insert(track, at: insertion)
+        shuffleHistory.removeAll()
     }
 
     func playNext() {
@@ -219,6 +224,7 @@ final class CatalogService: ObservableObject {
         if shuffleEnabled && playbackQueue.count > 1 {
             let candidates = playbackQueue.indices.filter { $0 != queueIndex }
             nextIndex = candidates.randomElement() ?? queueIndex
+            if nextIndex != queueIndex { shuffleHistory.append(queueIndex) }
         } else if queueIndex + 1 < playbackQueue.count {
             nextIndex = queueIndex + 1
         } else if repeatMode == .all {
@@ -235,6 +241,7 @@ final class CatalogService: ObservableObject {
         guard playbackQueue.indices.contains(index), index != queueIndex else { return }
         playbackQueue.remove(at: index)
         if index < queueIndex { queueIndex -= 1 }
+        shuffleHistory.removeAll()
     }
 
     /// Keeps the current item and clears everything scheduled after it.
@@ -245,6 +252,7 @@ final class CatalogService: ObservableObject {
             return
         }
         playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
+        shuffleHistory.removeAll()
     }
 
     func playPrevious() {
@@ -254,6 +262,11 @@ final class CatalogService: ObservableObject {
             return
         }
         let previousIndex: Int
+        if shuffleEnabled, let historic = shuffleHistory.popLast() {
+            queueIndex = historic
+            Task { await playQueueItem(playbackQueue[queueIndex]) }
+            return
+        }
         if queueIndex > 0 {
             previousIndex = queueIndex - 1
         } else if repeatMode == .all {
@@ -267,6 +280,7 @@ final class CatalogService: ObservableObject {
 
     func toggleShuffle() {
         shuffleEnabled.toggle()
+        shuffleHistory.removeAll()
     }
 
     func cycleRepeatMode() {
@@ -281,6 +295,13 @@ final class CatalogService: ObservableObject {
         guard !playbackQueue.isEmpty else { return }
         if repeatMode == .one {
             Task { await playQueueItem(playbackQueue[queueIndex]) }
+        } else if shuffleEnabled && playbackQueue.count > 1 {
+            let candidates = playbackQueue.indices.filter { $0 != queueIndex }
+            if let next = candidates.randomElement() {
+                shuffleHistory.append(queueIndex)
+                queueIndex = next
+                Task { await playQueueItem(playbackQueue[queueIndex]) }
+            }
         } else if queueIndex + 1 < playbackQueue.count {
             queueIndex += 1
             Task { await playQueueItem(playbackQueue[queueIndex]) }
@@ -312,6 +333,7 @@ final class CatalogService: ObservableObject {
         audioPlayer.stop()
         playbackQueue.removeAll()
         queueIndex = 0
+        shuffleHistory.removeAll()
     }
 
     func seek(to time: Double) {
