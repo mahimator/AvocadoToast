@@ -47,10 +47,10 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .confirmationDialog("Delete your local library?", isPresented: $showingResetConfirmation, titleVisibility: .visible) {
-                Button("Delete saved music and playlists", role: .destructive) { resetLibrary() }
+                Button("Delete library and imported audio", role: .destructive) { resetLibrary() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes locally saved tracks, albums, artists, playlists, and listening history. This cannot be undone.")
+                Text("This removes saved tracks, albums, artists, playlists, listening history, and imported audio files. This cannot be undone.")
             }
             .alert("Library", isPresented: Binding(get: { resetMessage != nil }, set: { if !$0 { resetMessage = nil } })) {
                 Button("OK", role: .cancel) { resetMessage = nil }
