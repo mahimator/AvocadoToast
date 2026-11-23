@@ -11,6 +11,7 @@ import Combine
 struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @ObservedObject private var catalog = CatalogService.shared
+    @ObservedObject private var config = AppConfig.shared
     @StateObject private var viewModel = SearchViewModel()
     @State private var query = ""
     @State private var selectedCategory: SearchType = .songs
@@ -121,7 +122,7 @@ struct SearchView: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 13)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(config.enableGlassEffects ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(ColorTokens.separator)
