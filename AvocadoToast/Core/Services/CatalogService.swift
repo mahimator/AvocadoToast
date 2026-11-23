@@ -45,6 +45,7 @@ final class CatalogService: ObservableObject {
     private var shuffleHistory: [Int] = []
     private var shuffleDeck: [Int] = []
     private var homeRequestID: UUID?
+    private var playbackRequestID: UUID?
 
     var canPlayPrevious: Bool { queueIndex > 0 || repeatMode == .all || (shuffleEnabled && !shuffleHistory.isEmpty) }
     var canPlayNext: Bool { (shuffleEnabled && playbackQueue.count > 1 && (!shuffleDeck.isEmpty || repeatMode == .all)) || queueIndex + 1 < playbackQueue.count || repeatMode == .all }
@@ -205,11 +206,15 @@ final class CatalogService: ObservableObject {
     }
 
     private func playQueueItem(_ track: YouTubeTrack) async {
+        let requestID = UUID()
+        playbackRequestID = requestID
         var prepared = track
         if track.provider != "local" && prepared.streamURL == nil {
             prepared.streamURL = await resolveStream(for: prepared)
         }
+        guard playbackRequestID == requestID else { return }
         await audioPlayer.play(prepared)
+        guard playbackRequestID == requestID else { return }
         if audioPlayer.isPlaying { LibraryService.shared.recordPlayed(track) }
     }
 
@@ -361,6 +366,7 @@ final class CatalogService: ObservableObject {
     }
 
     func stop() {
+        playbackRequestID = nil
         audioPlayer.stop()
         playbackQueue.removeAll()
         queueIndex = 0
