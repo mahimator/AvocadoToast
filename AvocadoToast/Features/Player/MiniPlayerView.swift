@@ -12,48 +12,68 @@ struct MiniPlayerView: View {
     var body: some View {
         Group {
             if let track = player.currentTrack {
-                HStack(spacing: 12) {
-                    artwork(track)
-                    Button {
-                        coordinator.showingNowPlaying = true
-                    } label: {
+                HStack(spacing: 11) {
+                    artwork(for: track)
+                    Button { coordinator.showingNowPlaying = true } label: {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(track.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(ColorTokens.textPrimary)
+                                .lineLimit(1)
+                            Text(track.artist)
+                                .font(.caption)
+                                .foregroundStyle(ColorTokens.textSecondary)
+                                .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(ColorTokens.textPrimary)
                             .frame(width: 42, height: 42)
                             .contentShape(Circle())
                     }
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 }
                 .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.16)))
-                .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(ColorTokens.textPrimary.opacity(0.08))
+                }
+                .shadow(color: .black.opacity(0.22), radius: 14, y: 5)
             }
         }
     }
 
     @ViewBuilder
-    private func artwork(_ track: YouTubeTrack) -> some View {
-        if let url = track.thumbnailURL.flatMap({ URL(string: $0) }) {
-            CachedAsyncImage(url: url, size: CGSize(width: 48, height: 48)) { image in
+    private func artwork(for track: YouTubeTrack) -> some View {
+        if let artworkURL = track.thumbnailURL.flatMap({ URL(string: $0) }) {
+            CachedAsyncImage(url: artworkURL, size: CGSize(width: 48, height: 48)) { image in
                 if let image {
-                    Image(uiImage: image).resizable().scaledToFill()
-                        .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 10))
-                } else { placeholder }
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    placeholder
+                }
             }
-        } else { placeholder }
+        } else {
+            placeholder
+        }
     }
 
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.18)).frame(width: 48, height: 48)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(ColorTokens.artworkPlaceholder)
+            .overlay {
+                Image(systemName: "music.note")
+                    .foregroundStyle(ColorTokens.textSecondary)
+            }
+            .frame(width: 48, height: 48)
     }
 }
