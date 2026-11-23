@@ -90,6 +90,9 @@ final class LibraryService: ObservableObject {
     }
 
     func removeTrack(_ track: TrackModel) {
+        if track.provider == "local" {
+            LocalAudioManager.shared.deleteImportedAudio(at: track.providerID)
+        }
         context.delete(track)
         save()
         refresh()
@@ -107,13 +110,13 @@ final class LibraryService: ObservableObject {
     func toggleSaveYouTubeTrack(_ track: YouTubeTrack) {
         let domain = DomainTrack(
             id: track.videoId,
-            provider: "youtube",
-            providerID: track.videoId,
+            provider: track.provider,
+            providerID: track.provider == "local" ? (track.localFileURL ?? track.videoId) : track.videoId,
             title: track.title,
             artistName: track.artist,
             artworkURL: track.thumbnailURL.flatMap { URL(string: $0) },
             duration: track.duration,
-            isVideo: true,
+            isVideo: track.provider != "local",
             isPlayable: true
         )
         toggleSave(domain)
@@ -134,6 +137,7 @@ final class LibraryService: ObservableObject {
         if let existing = recentlyPlayed.first(where: { $0.id == stableID }) {
             existing.lastPlayedAt = now
             existing.playCount += 1
+            existing.providerID = track.provider == "local" ? (track.localFileURL ?? track.videoId) : track.videoId
             existing.title = track.title
             existing.artistName = track.artist
             existing.artworkURL = track.thumbnailURL
