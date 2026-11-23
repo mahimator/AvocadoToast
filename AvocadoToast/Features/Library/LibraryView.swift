@@ -221,38 +221,38 @@ enum LibraryFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .songs: "Songs"
-        case .albums: "Albums"
-        case .artists: "Artists"
-        case .playlists: "Playlists"
-        case .recent: "Recent"
+        case .songs: return "Songs"
+        case .albums: return "Albums"
+        case .artists: return "Artists"
+        case .playlists: return "Playlists"
+        case .recent: return "Recent"
         }
     }
     var emptyIcon: String {
         switch self {
-        case .songs: "music.note"
-        case .albums: "square.stack"
-        case .artists: "person.crop.circle"
-        case .playlists: "music.note.list"
-        case .recent: "clock"
+        case .songs: return "music.note"
+        case .albums: return "square.stack"
+        case .artists: return "person.crop.circle"
+        case .playlists: return "music.note.list"
+        case .recent: return "clock"
         }
     }
     var emptyTitle: String {
         switch self {
-        case .songs: "Nothing on the toast yet"
-        case .albums: "No albums tucked away"
-        case .artists: "No artists in your pantry"
-        case .playlists: "The pantry is empty"
-        case .recent: "Nothing playing lately"
+        case .songs: return "Nothing on the toast yet"
+        case .albums: return "No albums tucked away"
+        case .artists: return "No artists in your pantry"
+        case .playlists: return "The pantry is empty"
+        case .recent: return "Nothing playing lately"
         }
     }
     var emptyDescription: String {
         switch self {
-        case .songs: "Save tracks you want to come back to."
-        case .albums: "Keep the albums you love close."
-        case .artists: "Save artists to keep them within reach."
-        case .playlists: "Make a little collection for every mood."
-        case .recent: "Play a little music and your history will show up here."
+        case .songs: return "Save tracks you want to come back to."
+        case .albums: return "Keep the albums you love close."
+        case .artists: return "Save artists to keep them within reach."
+        case .playlists: return "Make a little collection for every mood."
+        case .recent: return "Play a little music and your history will show up here."
         }
     }
 }
