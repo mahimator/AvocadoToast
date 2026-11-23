@@ -251,6 +251,20 @@ final class LibraryService: ObservableObject {
         refresh()
     }
 
+    func moveTrackInPlaylist(_ playlist: PlaylistModel, from offsets: IndexSet, to destination: Int) {
+        guard !offsets.isEmpty, destination >= 0, destination <= playlist.trackIDs.count else { return }
+        var ids = playlist.trackIDs
+        let moving = offsets.sorted().map { ids[$0] }
+        for index in offsets.sorted(by: >) { ids.remove(at: index) }
+        let adjustedDestination = max(0, min(ids.count, destination - offsets.filter { $0 < destination }.count))
+        ids.insert(contentsOf: moving, at: adjustedDestination)
+        playlist.trackIDs = ids
+        playlist.tracks = ids.compactMap { id in savedTracks.first(where: { $0.id == id }) }
+        playlist.updatedAt = Date()
+        save()
+        refresh()
+    }
+
     func removeTrackFromPlaylist(_ playlist: PlaylistModel, trackId: String) {
         playlist.trackIDs.removeAll { $0 == trackId }
         playlist.tracks.removeAll { $0.id == trackId }
