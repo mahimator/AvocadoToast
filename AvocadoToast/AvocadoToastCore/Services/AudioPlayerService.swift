@@ -27,6 +27,7 @@ final class AudioPlayerService: ObservableObject {
     var onPlaybackFinished: (() -> Void)?
     var onPlaybackNext: (() -> Void)?
     var onPlaybackPrevious: (() -> Void)?
+    var onPlaybackRetry: (() -> Void)?
 
     private var audioFile: AVAudioFile?
     private var remoteTimeObserver: Any?
@@ -227,8 +228,12 @@ final class AudioPlayerService: ObservableObject {
             return
         }
         if isRemotePlayback, let item = remotePlayer.currentItem {
-            if item.status == .failed, let currentTrack {
-                Task { await play(currentTrack) }
+            if item.status == .failed {
+                if let onPlaybackRetry {
+                    onPlaybackRetry()
+                } else if let currentTrack {
+                    Task { await play(currentTrack) }
+                }
                 return
             }
             remotePlayer.play()
