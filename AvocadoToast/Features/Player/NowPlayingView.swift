@@ -2,216 +2,140 @@
 //  NowPlayingView.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
-//
 
 import SwiftUI
 
-/// Full-screen now-playing view with artwork, playback controls, queue and shuffle/repeat.
 struct NowPlayingView: View {
-    @ObservedObject private var player = PlayerService.shared
+    @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
-            // Ambient background
-            backgroundView
-                .ignoresSafeArea()
-
+            background
             VStack(spacing: 0) {
-                // Top navigation glass bar
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.down")
-                            .font(.title2)
-                            .foregroundStyle(.primary)
-                            .padding(10)
-                            .background(.thinMaterial)
-                            .clipShape(Circle())
-                    }
-
-                    Spacer()
-
-                    Button(action: { /* more actions */ }) {
-                        Image(systemName: "ellipsis")
-                            .font(.title2)
-                            .foregroundStyle(.primary)
-                            .padding(10)
-                            .background(.thinMaterial)
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
+                header
                 Spacer(minLength: 20)
-
                 if let track = player.currentTrack {
-                    // Artwork
-                    artworkView(for: track)
-
+                    artwork(track)
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 34)
                     VStack(spacing: 8) {
                         Text(track.title)
                             .font(.title2.weight(.bold))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
-                        Text(track.artistName)
-                            .font(.title3)
+                        Text(track.artist)
+                            .font(.headline)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        if let album = track.albumName, !album.isEmpty {
-                            Text(album)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary.opacity(0.8))
-                        }
                     }
-                    .padding(.horizontal)
-
-                    // Progress
-                    VStack(spacing: 6) {
-                        HStack {
-                            Text(player.currentTime.formattedDuration)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            if let duration = track.duration {
-                                Text(duration.formattedDuration)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Slider(value: Binding(
-                            get: { player.currentTime },
-                            set: { player.seek(to: $0) }
-                        ), in: 0...max((track.duration ?? 0), 1))
-                        .tint(Color.accentColor)
+                    .padding(.horizontal, 24)
+                    progressControl
+                        .padding(.horizontal, 28)
+                        .padding(.top, 26)
+                    Button { player.togglePlayPause() } label: {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(width: 78, height: 78)
+                            .background(ColorTokens.accentPrimary, in: Circle())
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.top, 30)
-
-                    // Primary controls
-                    HStack(spacing: 36) {
-                        Button(action: { player.previousTrack() }) {
-                            Image(systemName: "backward.fill")
-                                .font(.title2)
-                                .foregroundStyle(.primary)
-                        }
-                        Button(action: { player.togglePlayPause() }) {
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 44, weight: .semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        Button(action: { player.nextTrack() }) {
-                            Image(systemName: "forward.fill")
-                                .font(.title2)
-                                .foregroundStyle(.primary)
-                        }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(player.isPlaying ? "Pause playback" : "Start playback")
+                    .padding(.top, 26)
+                    if let message = player.errorMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 16)
                     }
-                    .padding(.top, 30)
-
-                    // Secondary controls
-                    HStack(spacing: 40) {
-                        Button(action: { player.setShuffle(!player.isShuffleOn) }) {
-                            Image(systemName: player.isShuffleOn ? "shuffle.fill" : "shuffle")
-                                .font(.title3)
-                                .foregroundStyle(player.isShuffleOn ? Color.accentColor : .secondary)
-                        }
-                        Button(action: { player.nextRepeatMode() }) {
-                            Image(systemName: repeatIcon)
-                                .font(.title3)
-                                .foregroundStyle(player.repeatMode != .off ? Color.accentColor : .secondary)
-                        }
-                        Button(action: { /* queue */ }) {
-                            Image(systemName: "list.bullet")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.top, 24)
-
-                    Spacer(minLength: 30)
                 } else {
-                    ContentUnavailableView("No Track", systemImage: "music.note", description: Text("Select a track to play"))
+                    ContentUnavailableView("Nothing playing", systemImage: "music.note", description: Text("Choose something from Search to get started."))
                 }
+                Spacer(minLength: 36)
             }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
-    // MARK: - Subviews
-
-    private var backgroundView: some View {
-        Group {
-            if let artworkURL = player.currentTrack?.artworkURL,
-               let _ = ArtworkService.shared.imageInMemory(for: artworkURL) {
-                // Colored ambient gradient placeholder; real artwork-driven background
-                // would use the loaded image with a blur.
-                LinearGradient(
-                    colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.1)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            } else {
-                LinearGradient(
-                    colors: [Color(.systemBackground), Color(.systemGroupedBackground)],
-                    startPoint: .top, endPoint: .bottom
-                )
+    private var header: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.down")
+                    .font(.headline)
+                    .frame(width: 42, height: 42)
+                    .background(.thinMaterial, in: Circle())
             }
+            Spacer()
+            VStack(spacing: 2) {
+                Text("NOW PLAYING")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.8)
+                Text("AvocadoToast")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "ellipsis")
+                .font(.headline)
+                .frame(width: 42, height: 42)
+                .background(.thinMaterial, in: Circle())
+                .opacity(0)
         }
-        .ignoresSafeArea()
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+    }
+
+    private var progressControl: some View {
+        VStack(spacing: 7) {
+            Slider(value: Binding(get: { player.currentTime }, set: { player.seek(to: $0) }),
+                   in: 0...max(player.duration, 1))
+                .tint(ColorTokens.accentPrimary)
+            HStack {
+                Text(player.currentTime.formattedDuration)
+                Spacer()
+                Text(player.duration.formattedDuration)
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder
-    private func artworkView(for track: DomainTrack) -> some View {
-        if let artworkURL = track.artworkURL {
-            CachedAsyncImage(url: artworkURL, size: CGSize(width: 280, height: 280)) { image in
+    private func artwork(_ track: YouTubeTrack) -> some View {
+        if let url = track.thumbnailURL.flatMap({ URL(string: $0) }) {
+            CachedAsyncImage(url: url, size: CGSize(width: 340, height: 340)) { image in
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 280, height: 280)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
-                        .shadow(color: Color.black.opacity(0.35), radius: 20, x: 0, y: 10)
-                } else {
-                    placeholderArtwork
-                }
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .shadow(color: .black.opacity(0.22), radius: 24, y: 10)
+                } else { artworkPlaceholder }
             }
-        } else {
-            placeholderArtwork
-        }
+        } else { artworkPlaceholder }
     }
 
-    private var placeholderArtwork: some View {
-        RoundedRectangle(cornerRadius: 24)
+    private var artworkPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
             .fill(Color.secondary.opacity(0.15))
-            .frame(width: 280, height: 280)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity)
     }
 
-    private var repeatIcon: String {
-        switch player.repeatMode {
-        case .off: return "repeat"
-        case .one: return "repeat.1"
-        case .all: return "repeat"
-        }
+    private var background: some View {
+        LinearGradient(colors: [ColorTokens.accentPrimary.opacity(0.24), Color(.systemBackground), Color(.systemGroupedBackground)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay(.ultraThinMaterial.opacity(0.3))
+            .ignoresSafeArea()
     }
 }
-
-// MARK: - Time interval formatting
 
 extension TimeInterval {
     var formattedDuration: String {
-        let total = Int(self)
-        let m = total / 60, s = total % 60
-        return m > 0 ? "\(m):\(s < 10 ? "0" : "")\(s)" : "\(s)s"
-    }
-}
-
-extension PlayerService {
-    /// Advance repeat mode cyclically.
-    func nextRepeatMode() {
-        switch repeatMode {
-        case .off: setRepeat(.all)
-        case .all: setRepeat(.one)
-        case .one: setRepeat(.off)
-        }
+        let total = max(0, Int(self))
+        let minutes = total / 60
+        let seconds = total % 60
+        return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
     }
 }
