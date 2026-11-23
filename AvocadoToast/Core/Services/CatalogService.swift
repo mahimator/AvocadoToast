@@ -28,6 +28,12 @@ final class CatalogService: ObservableObject {
 
     @Published var savedTracks: [YouTubeTrack] = []
 
+    // Queue state belongs to the catalog/player boundary, not individual screens.
+    @Published private(set) var playbackQueue: [YouTubeTrack] = []
+    @Published private(set) var queueIndex: Int = 0
+    @Published var shuffleEnabled: Bool = false
+    @Published var repeatMode: QueueRepeatMode = .off
+
     private var searchTask: Task<Void, Never>?
     private var activeSearchID: UUID?
 
@@ -63,6 +69,9 @@ final class CatalogService: ObservableObject {
         self.localAudioManager = localAudioManager
         self.audioPlayer = audioPlayer
         refreshSavedTracks()
+        audioPlayer.onPlaybackFinished = { [weak self] in
+            Task { @MainActor in self?.advanceQueueAfterCompletion() }
+        }
     }
 
     // MARK: - Search
@@ -132,19 +141,91 @@ final class CatalogService: ObservableObject {
         return streamURL
     }
 
+    /// Starts a single track and resets queue context to that item.
     func playTrack(_ track: YouTubeTrack) async {
-        var trackToPlay = track
-        if trackToPlay.streamURL == nil {
-            let streamURL = await resolveStream(for: track)
-            trackToPlay.streamURL = streamURL
-        }
+        playbackQueue = [track]
+        queueIndex = 0
+        await playQueueItem(track)
+    }
 
+    /// Starts a queue, optionally at a selected track. Queue controls operate on
+    /// this state so screens don't independently invent playback behaviour.
+    func playQueue(_ tracks: [YouTubeTrack], startAt index: Int = 0) async {
+        guard !tracks.isEmpty else { return }
+        playbackQueue = tracks
+        queueIndex = min(max(index, 0), tracks.count - 1)
+        await playQueueItem(playbackQueue[queueIndex])
+    }
+
+    private func playQueueItem(_ track: YouTubeTrack) async {
+        var prepared = track
         if let localPath = localAudioManager.localFilePath(for: track.videoId) {
-            trackToPlay.localFileURL = localPath
-            trackToPlay.isDownloaded = true
+            prepared.localFileURL = localPath
+            prepared.isDownloaded = true
+        } else if prepared.streamURL == nil {
+            prepared.streamURL = await resolveStream(for: prepared)
         }
+        await audioPlayer.play(prepared)
+    }
 
-        await audioPlayer.play(trackToPlay)
+    func playNext() {
+        guard !playbackQueue.isEmpty else { return }
+        let nextIndex: Int
+        if shuffleEnabled && playbackQueue.count > 1 {
+            let candidates = playbackQueue.indices.filter { $0 != queueIndex }
+            nextIndex = candidates.randomElement() ?? queueIndex
+        } else if queueIndex + 1 < playbackQueue.count {
+            nextIndex = queueIndex + 1
+        } else if repeatMode == .all {
+            nextIndex = 0
+        } else {
+            return
+        }
+        queueIndex = nextIndex
+        Task { await playQueueItem(playbackQueue[nextIndex]) }
+    }
+
+    func playPrevious() {
+        guard !playbackQueue.isEmpty else { return }
+        if audioPlayer.currentTime > 3 {
+            Task { await playQueueItem(playbackQueue[queueIndex]) }
+            return
+        }
+        let previousIndex: Int
+        if queueIndex > 0 {
+            previousIndex = queueIndex - 1
+        } else if repeatMode == .all {
+            previousIndex = playbackQueue.count - 1
+        } else {
+            return
+        }
+        queueIndex = previousIndex
+        Task { await playQueueItem(playbackQueue[queueIndex]) }
+    }
+
+    func toggleShuffle() {
+        shuffleEnabled.toggle()
+    }
+
+    func cycleRepeatMode() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+    }
+
+    private func advanceQueueAfterCompletion() {
+        guard !playbackQueue.isEmpty else { return }
+        if repeatMode == .one {
+            Task { await playQueueItem(playbackQueue[queueIndex]) }
+        } else if queueIndex + 1 < playbackQueue.count {
+            queueIndex += 1
+            Task { await playQueueItem(playbackQueue[queueIndex]) }
+        } else if repeatMode == .all {
+            queueIndex = 0
+            Task { await playQueueItem(playbackQueue[queueIndex]) }
+        }
     }
 
     func downloadTrack(_ track: YouTubeTrack) async {
