@@ -1,45 +1,20 @@
-AVOCADO TOAST BUILD PROGRESS
-============================
-Date: 2026-11-23
+AvocadoToast rebuild progress (2026-11-23)
 
-PROJECT STATE
--------------
-- Xcode project builds cleanly (Debug + Release) on iOS Simulator (iPhone 17, iOS 26.5), zero warnings
-- App installs and launches successfully on simulator
-- Real FastAPI + ytmusicapi backend running locally; all catalog endpoints return real music data
-- SwiftData persistence wired (Models + PersistenceController)
-- All primary screens navigable: Home, Search, Library, Settings, Album/Artist/Playlist detail, Mini-player, Now Playing
-- Player state machine, queue, shuffle, repeat implemented
+Branch: fuhahh-try
+Current pass: UI repairs, warm visual system, persistence and playback architecture cleanup.
 
-WHAT I HAVE DONE
-----------------
-1. Fixed build blocker: ArtistModel stored property 'description' reserved by SwiftData @Model -> renamed to artistDescription
-2. Moved all source under AvocadoToast/ (synchronized project group) so files auto-compile
-3. Fixed project settings: SWIFT_DEFAULT_ACTOR_ISOLATION = none (SwiftData @Model SendableMetatype requirement); removed redundant @unchecked Sendable on models
-4. Rewrote PersistenceController to use Schema + all 4 SwiftData models
-5. Rewrote APIClient (async/await, error mapping, cancelAllRequests via completion handler)
-6. Rewrote CatalogService: real search/home/album/artist/playlist/related/lyrics/charts/health with caching + stale-request cancellation
-7. Rewrote LibraryService: SwiftData-backed save/remove for tracks/albums/artists/playlists, custom playlists, recently played
-8. Rewrote PlayerService: playback state machine (idle/loading/ready/playing/paused/buffering/failed/ended), queue, shuffle, repeat (off/one/all), next/previous/seek, AVPlayer engine, honest "playback source unavailable" state
-9. Rewrote ArtworkService: memory + disk cache, async non-blocking loading
-10. Rewrote SearchService: debounced search, recent search history
-11. Built HomeView + HomeViewModel + SectionView (glass UI, refresh, greeting)
-12. Built SearchView: debounced search, category filter, recent searches, save-to-library, context menus
-13. Built LibraryView: filters (songs/albums/artists/playlists/recent), remove, create/rename/delete playlists
-14. Built MiniPlayerView (floating, persistent), NowPlayingView (artwork, controls, shuffle/repeat/queue/progress)
-15. Built AlbumDetailView, ArtistDetailView, PlaylistDetailView with real data + save
-16. Built SettingsView
-17. Wired ContentView: TabView + NavigationStack + coordinator path destinations + floating mini-player + now-playing sheet
-18. Wired AvocadoToastApp: environmentObject(AppCoordinator) + SwiftData modelContainer
-19. Built FastAPI backend (backend/): config, cache service (TTL), ytmusicapi provider + normalizer, catalog service, all /api/v1 endpoints, CORS
-20. Verified backend endpoints return real YouTube Music data (search, home, charts, song/album/artist detail, lyrics, related)
+Done in this pass:
+* Espresso/olive/butter/toast palette applied.
+* Library UI repaired and empty states refined.
+* Search UI repaired; compile error found by CI and fixed.
+* Theme selection now persists and applies at app root.
+* Search save actions now route into SwiftData.
+* App and LibraryService share the same ModelContainer.
+* Remote audio path now uses AVPlayer, local files retain AVAudioEngine/EQ.
+* GitHub Actions simulator build workflow added.
 
-WHAT IS LEFT (polish before ship)
----------------------------------
-- Add an Xcode test target and run the unit-test suite (SRS step 14)
-- Rigorous manual testing on a physical iPhone
-- Backend resilience: provider fallback / mock data when ytmusicapi unreachable
-- Accessibility audit (VoiceOver, Dynamic Type, Reduce Motion)
-- App Store release configuration (code signing, entitlements, versioning)
-
-STATUS: BUILDABLE + LAUNCHABLE + BACKEND FUNCTIONAL. Core MVP complete.
+Verification:
+* First simulator build failed on a ternary with two different opaque SwiftUI view types.
+* That error has been fixed.
+* Follow-up build is currently running. No build-clean claim yet.
+* Physical-device playback and all UI interactions remain unverified.
