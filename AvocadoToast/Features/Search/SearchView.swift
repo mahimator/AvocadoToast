@@ -110,7 +110,7 @@ struct SearchView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
-                .onSubmit { viewModel.searchNow(query) }
+                .onSubmit { viewModel.searchNow(query, type: selectedCategory) }
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
