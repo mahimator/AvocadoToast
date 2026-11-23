@@ -220,11 +220,23 @@ final class AudioPlayerService: ObservableObject {
 
     func resume() {
         guard currentTrack != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            errorMessage = "Audio session couldn't resume: \(error.localizedDescription)"
+            return
+        }
         if isRemotePlayback, remotePlayer.currentItem != nil {
             remotePlayer.play()
             isPlaying = true
             updateNowPlayingInfo()
         } else if bufferIsLoaded {
+            do {
+                if !engine.isRunning { try engine.start() }
+            } catch {
+                errorMessage = "Audio engine couldn't resume: \(error.localizedDescription)"
+                return
+            }
             playerNode.play()
             isPlaying = true
             startProgressTimer()
