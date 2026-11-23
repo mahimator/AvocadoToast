@@ -43,8 +43,24 @@ final class YouTubeKitService: ObservableObject {
 
         do {
             let json = try await client.search(query: term, client: config.defaultClient)
-            let results = YouTubeFeedParser.searchResults(in: json)
-            return results.videos.prefix(limit).map { video in
+            // Music search returns musicResponsiveListItemRenderer rows, not
+            // ordinary videoRenderer rows. Parse Music rows first, then use the
+            // general parser as a fallback for mixed/legacy results.
+            let songs = LibraryBrowseParser.parseSongs(from: json)
+            if !songs.isEmpty {
+                var seen = Set<String>()
+                return songs.filter { seen.insert($0.videoId).inserted }
+                    .prefix(limit).map { song in
+                        YouTubeTrack(
+                            videoId: song.videoId,
+                            title: song.title,
+                            artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
+                            duration: Double(song.duration),
+                            thumbnailURL: song.thumbnailUrl
+                        )
+                    }
+            }
+            return YouTubeFeedParser.searchResults(in: json).videos.prefix(limit).map { video in
                 YouTubeTrack(
                     videoId: video.videoId,
                     title: video.title,
@@ -94,7 +110,13 @@ final class YouTubeKitService: ObservableObject {
                 params: YouTubeSearchFilter.channel.rawValue,
                 client: config.defaultClient
             )
-            return Array(YouTubeFeedParser.searchResults(in: json).channels.prefix(limit))
+            return LibraryBrowseParser.parseArtists(from: json).prefix(limit).map { artist in
+                YouTubeChannel(
+                    channelId: artist.channelId ?? artist.browseId,
+                    title: artist.name,
+                    thumbnailURL: artist.thumbnailUrl
+                )
+            }
         } catch {
             searchError = error.localizedDescription
             return []
@@ -109,7 +131,14 @@ final class YouTubeKitService: ObservableObject {
                 params: YouTubeSearchFilter.playlist.rawValue,
                 client: config.defaultClient
             )
-            return Array(YouTubeFeedParser.searchResults(in: json).playlists.prefix(limit))
+            return LibraryBrowseParser.parsePlaylists(from: json).prefix(limit).map { playlist in
+                YouTubePlaylist(
+                    playlistId: playlist.browseId,
+                    title: playlist.title,
+                    thumbnailURL: playlist.thumbnailUrl,
+                    videoCountText: playlist.songCount.map { "\\($0) songs" }
+                )
+            }
         } catch {
             searchError = error.localizedDescription
             return []
