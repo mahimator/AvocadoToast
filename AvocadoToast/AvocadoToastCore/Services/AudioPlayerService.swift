@@ -95,7 +95,7 @@ final class AudioPlayerService: ObservableObject {
         ) { [weak self] notification in
             Task { @MainActor in
                 guard let self,
-                      notification.object as? AVPlayerItem === self.remotePlayer.currentItem else { return }
+                      (notification.object as? AVPlayerItem) === self.remotePlayer.currentItem else { return }
                 self.isPlaying = false
                 self.currentTime = self.duration
             }
