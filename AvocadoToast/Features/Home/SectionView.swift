@@ -17,9 +17,6 @@ struct SectionView: View {
                 Text(section.title)
                     .font(.headline.weight(.semibold))
                 Spacer()
-                Button("See All") { /* navigate to full section */ }
-                    .font(.subheadline)
-                    .foregroundStyle(Color.accentColor)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
