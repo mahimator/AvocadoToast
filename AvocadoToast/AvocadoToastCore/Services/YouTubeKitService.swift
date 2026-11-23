@@ -130,14 +130,18 @@ final class YouTubeKitService: ObservableObject {
                     videoQuality: .auto
                 )
             )
+            // SwiftyTube's live provider bundle wires its documented PoToken,
+            // signature timestamp, cipher and WebView-backed helpers. The previous
+            // .none configuration left those hooks disabled, causing protected
+            // streams to fail even when the package could resolve them.
             let result = try await StreamFallback.resolveFirstValid(
                 request,
                 using: client,
-                providers: .none
+                providers: .live
             )
             return result.streamUrl
         } catch {
-            searchError = "Stream resolution failed"
+            searchError = "Stream resolution failed: \(error.localizedDescription)"
             return nil
         }
     }
