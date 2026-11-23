@@ -2,8 +2,7 @@
 //  SearchView.swift
 //  AvocadoToast
 //
-//  Native catalog search. Category filters are intentionally withheld until the
-//  underlying provider query supports them, rather than presenting fake filters.
+//  Catalog search with warm surfaces and honest empty/loading/error states.
 //
 
 import SwiftUI
@@ -12,136 +11,148 @@ import Combine
 struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel = SearchViewModel()
-    @State private var query: String = ""
+    @State private var query = ""
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                searchBar
-                    .padding(.horizontal, 16)
+                searchField
+                    .padding(.horizontal, 18)
                     .padding(.top, 12)
+
                 Text("Songs, artists, albums and playlists")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 22)
                     .padding(.top, 10)
 
                 Group {
                     if CatalogService.shared.isSearching {
-                        searchingView
+                        loadingState
                     } else if let error = CatalogService.shared.searchError, !error.isEmpty {
-                        errorView(error)
-                    } else if query.isEmpty && viewModel.recentSearches.isEmpty {
-                        emptyPrompt
+                        ContentUnavailableView("Couldn't find a slice of that", systemImage: "wifi.exclamationmark", description: Text(error))
                     } else if query.isEmpty {
-                        recentSearchesView
+                        recentSearches.isEmpty ? searchPrompt : recentSearchesView
                     } else if CatalogService.shared.searchResults.isEmpty {
-                        emptyResults
+                        ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try another artist, track or album."))
                     } else {
                         resultsList
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
+            .background(ColorTokens.backgroundPrimary.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 query = coordinator.searchQuery
-                if !query.isEmpty { viewModel.searchNow(query) }
+                if !query.isEmpty {
+                    viewModel.searchNow(query)
+                }
             }
-            .onChange(of: query) { _, newValue in
-                coordinator.searchQuery = newValue
-                viewModel.debounceSearch(newValue)
+            .onChange(of: query) { _, value in
+                coordinator.searchQuery = value
+                viewModel.debounceSearch(value)
             }
         }
     }
 
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search music", text: $query)
-                .textInputAutocapitalization(.none)
+    private var searchField: some View {
+        HStack(spacing: 11) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(ColorTokens.textSecondary)
+            TextField("What sounds good?", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit { viewModel.searchNow(query) }
             if !query.isEmpty {
                 Button { query = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(ColorTokens.textSecondary)
                 }
                 .accessibilityLabel("Clear search")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.12)))
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(ColorTokens.separator)
+        }
     }
 
-    private var searchingView: some View {
+    private var loadingState: some View {
         VStack(spacing: 12) {
-            ProgressView()
-            Text("Searching catalog…").foregroundStyle(.secondary)
+            ProgressView().tint(ColorTokens.accentPrimary)
+            Text("Looking around the catalog…")
+                .foregroundStyle(ColorTokens.textSecondary)
         }
         .frame(maxHeight: .infinity)
     }
 
-    private func errorView(_ error: String) -> some View {
-        ContentUnavailableView("Search unavailable", systemImage: "wifi.exclamationmark", description: Text(error))
+    private var searchPrompt: some View {
+        ContentUnavailableView("Find your next favorite", systemImage: "magnifyingglass", description: Text("Search for a song, artist, album or playlist."))
     }
 
-    private var emptyPrompt: some View {
-        ContentUnavailableView("Find your next track", systemImage: "magnifyingglass", description: Text("Search a song, artist, album, or playlist."))
-    }
+    private var recentSearches: [String] { viewModel.recentSearches }
 
     private var recentSearchesView: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Recent searches").font(.headline)
+                Text("Recent searches")
+                    .font(.headline)
+                    .foregroundStyle(ColorTokens.textPrimary)
                 Spacer()
                 Button("Clear") { viewModel.clearHistory() }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.textSecondary)
             }
-            .padding(.horizontal)
-            ForEach(viewModel.recentSearches, id: \.self) { recent in
+            .padding(.horizontal, 18)
+            ForEach(recentSearches, id: \.self) { term in
                 Button {
-                    query = recent
-                    viewModel.searchNow(recent)
+                    query = term
+                    viewModel.searchNow(term)
                 } label: {
-                    Label(recent, systemImage: "clock.arrow.circlepath")
-                        .foregroundStyle(.primary)
+                    Label(term, systemImage: "clock.arrow.circlepath")
+                        .foregroundStyle(ColorTokens.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
             }
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var emptyResults: some View {
-        ContentUnavailableView("No results", systemImage: "music.note.magnifyingglass", description: Text("No matches for “\(query)”"))
+        .padding(.top, 20)
     }
 
     private var resultsList: some View {
-        List(CatalogService.shared.searchResults) { track in
-            Button {
-                viewModel.select(track)
-                Task { await CatalogService.shared.playTrack(track) }
-            } label: {
-                SearchResultRow(track: track)
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
+        List {
+            ForEach(CatalogService.shared.searchResults) { track in
                 Button {
-                    CatalogService.shared.toggleSave(track)
+                    viewModel.select(track)
+                    Task { await CatalogService.shared.playTrack(track) }
                 } label: {
-                    Label(CatalogService.shared.isSaved(track) ? "Remove from Library" : "Save to Library", systemImage: "heart")
+                    SearchResultRow(track: track)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        CatalogService.shared.toggleSave(track)
+                    } label: {
+                        Label(
+                            CatalogService.shared.isSaved(track) ? "Remove from Library" : "Save to Library",
+                            systemImage: CatalogService.shared.isSaved(track) ? "heart.slash" : "heart"
+                        )
+                    }
                 }
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ColorTokens.backgroundPrimary)
     }
 }
 
@@ -150,27 +161,52 @@ struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if let url = track.thumbnailURL.flatMap(URL.init(string:)) {
-                CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
-                    if let image {
-                        Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else { placeholderArtwork }
-                }
-            } else { placeholderArtwork }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(track.title).font(.body.weight(.medium)).lineLimit(1)
-                Text(track.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                Text(track.formattedDuration).font(.caption2).foregroundStyle(.tertiary)
+            artwork
+            VStack(alignment: .leading, spacing: 4) {
+                Text(track.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(ColorTokens.textPrimary)
+                    .lineLimit(1)
+                Text(track.artist)
+                    .font(.subheadline)
+                    .foregroundStyle(ColorTokens.textSecondary)
+                    .lineLimit(1)
+                Text(track.formattedDuration)
+                    .font(.caption2)
+                    .foregroundStyle(ColorTokens.textSecondary.opacity(0.8))
             }
-            Spacer()
+            Spacer(minLength: 6)
         }
         .padding(.vertical, 5)
     }
 
-    private var placeholderArtwork: some View {
-        RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.15)).frame(width: 56, height: 56)
+    @ViewBuilder
+    private var artwork: some View {
+        if let url = track.thumbnailURL.flatMap({ URL(string: $0) }) {
+            CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    artworkPlaceholder
+                }
+            }
+        } else {
+            artworkPlaceholder
+        }
+    }
+
+    private var artworkPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(ColorTokens.artworkPlaceholder)
+            .overlay {
+                Image(systemName: "music.note")
+                    .foregroundStyle(ColorTokens.textSecondary)
+            }
+            .frame(width: 56, height: 56)
     }
 }
 
@@ -178,25 +214,31 @@ struct SearchResultRow: View {
 final class SearchViewModel: ObservableObject {
     @Published var recentSearches: [String] = []
     private let searchService: SearchService
-    private var searchTask: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
 
     init(searchService: SearchService = .shared) {
         self.searchService = searchService
         recentSearches = searchService.recentSearches
     }
 
-    func debounceSearch(_ query: String) {
-        searchTask?.cancel()
-        searchTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+    func debounceSearch(_ text: String) {
+        debounceTask?.cancel()
+        debounceTask = Task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled else { return }
-            searchNow(query)
+            searchNow(text)
         }
     }
 
-    func searchNow(_ query: String) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        CatalogService.shared.search(query: query)
+    func searchNow(_ text: String) {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else {
+            searchService.cancelSearch()
+            return
+        }
+        searchService.addRecent(cleaned)
+        recentSearches = searchService.recentSearches
+        CatalogService.shared.search(query: cleaned)
     }
 
     func select(_ track: YouTubeTrack) {
