@@ -22,6 +22,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    Toggle("Artwork ambience", isOn: $config.artworkBackgroundEnabled)
                     Toggle("Reduce Motion", isOn: $config.reduceMotion)
                     Toggle("Glass Effects", isOn: $config.enableGlassEffects)
                 }
