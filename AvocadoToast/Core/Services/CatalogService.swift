@@ -48,7 +48,7 @@ final class CatalogService: ObservableObject {
             .filter { $0.provider == "youtube" || $0.provider == "local" }
             .map { item in
                 YouTubeTrack(
-                    videoId: item.providerID.isEmpty ? item.id : item.providerID,
+                    videoId: item.provider == "local" ? item.id : (item.providerID.isEmpty ? item.id : item.providerID),
                     title: item.title,
                     artist: item.artistName,
                     duration: item.duration ?? 0,
