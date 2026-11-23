@@ -24,7 +24,7 @@ struct AvocadoToastApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(AppCoordinator())
-                 .modelContainer(for: [TrackModel.self, AlbumModel.self, ArtistModel.self, PlaylistModel.self])
+                 .modelContainer(PersistenceController.shared.container)
                 .preferredColorScheme(preferredScheme)
         }
     }
