@@ -15,11 +15,14 @@ struct LibraryView: View {
     @State private var showingNewPlaylist = false
     @State private var showingAudioImporter = false
     @State private var importError: String?
+    @State private var isImportingAudio = false
+    @State private var importProgress = 0.0
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 18) {
                 header
+                if isImportingAudio { importProgressView }
                 filterPicker
                     .padding(.horizontal, 18)
 
@@ -83,6 +86,7 @@ struct LibraryView: View {
                 } label: {
                     Label("Import audio files", systemImage: "square.and.arrow.down")
                 }
+                .disabled(isImportingAudio)
             } label: {
                 Image(systemName: "plus")
                     .font(.headline)
@@ -97,12 +101,23 @@ struct LibraryView: View {
     }
 
     private func importAudioFiles(_ urls: [URL]) {
+        guard !urls.isEmpty, !isImportingAudio else { return }
+        Task { await importAudioFilesAsync(urls) }
+    }
+
+    private func importAudioFilesAsync(_ urls: [URL]) async {
+        isImportingAudio = true
+        importProgress = 0
+        defer {
+            isImportingAudio = false
+            importProgress = 0
+        }
+
         var failedImports: [String] = []
-        var importedCount = 0
         var importedModels: [TrackModel] = []
-        for source in urls {
+        for (index, source) in urls.enumerated() {
             do {
-                let imported = try LocalAudioManager.shared.importAudio(from: source)
+                let imported = try await LocalAudioManager.shared.importAudio(from: source)
                 let model = TrackModel(
                     id: imported.id,
                     provider: "local",
@@ -117,12 +132,14 @@ struct LibraryView: View {
                     playCount: 0
                 )
                 importedModels.append(model)
-                importedCount += 1
             } catch {
                 failedImports.append("\(source.lastPathComponent): \(error.localizedDescription)")
             }
+            importProgress = Double(index + 1) / Double(urls.count)
         }
+
         library.saveTracks(importedModels)
+        let importedCount = importedModels.count
         if failedImports.isEmpty {
             importError = "Imported \(importedCount) audio file\(importedCount == 1 ? "" : "s") into your library."
         } else {
@@ -130,6 +147,21 @@ struct LibraryView: View {
         }
     }
 
+    private var importProgressView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Adding music to your pantry")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(Int(importProgress * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(ColorTokens.textSecondary)
+            }
+            ProgressView(value: importProgress)
+                .tint(ColorTokens.accentPrimary)
+        }
+        .padding(.horizontal, 20)
+    }
     private var filterPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
