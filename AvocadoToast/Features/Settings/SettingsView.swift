@@ -61,10 +61,10 @@ struct SettingsView: View {
 
     private func resetLibrary() {
         do {
-            try modelContext.fetch(FetchDescriptor<TrackModel>()).forEach(modelContext.delete)
-            try modelContext.fetch(FetchDescriptor<AlbumModel>()).forEach(modelContext.delete)
-            try modelContext.fetch(FetchDescriptor<ArtistModel>()).forEach(modelContext.delete)
-            try modelContext.fetch(FetchDescriptor<PlaylistModel>()).forEach(modelContext.delete)
+            for item in try modelContext.fetch(FetchDescriptor<TrackModel>()) { modelContext.delete(item) }
+            for item in try modelContext.fetch(FetchDescriptor<AlbumModel>()) { modelContext.delete(item) }
+            for item in try modelContext.fetch(FetchDescriptor<ArtistModel>()) { modelContext.delete(item) }
+            for item in try modelContext.fetch(FetchDescriptor<PlaylistModel>()) { modelContext.delete(item) }
             try modelContext.save()
             LibraryService.shared.refresh()
             resetMessage = "Your local library has been cleared."
