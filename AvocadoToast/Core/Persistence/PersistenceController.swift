@@ -14,7 +14,7 @@ final class PersistenceController {
     let container: ModelContainer
     
     private init() {
-        let schema = Schema([TrackModel.self, AlbumModel.self, ArtistModel.self, PlaylistModel.self])
+        let schema = Schema([TrackModel.self, AlbumModel.self, ArtistModel.self, PlaylistModel.self, RecentTrackModel.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: false)
         do { container = try ModelContainer(for: schema, configurations: [config]) }
         catch { fatalError("Failed PersistenceController: \(error)") }
