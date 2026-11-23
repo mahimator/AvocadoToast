@@ -190,6 +190,7 @@ final class AudioPlayerService: ObservableObject {
         playerNode.play()
         isPlaying = true
         startProgressTimer()
+        updateNowPlayingInfo()
     }
 
     func pause() {
@@ -201,6 +202,7 @@ final class AudioPlayerService: ObservableObject {
         }
         isPlaying = false
         stopProgressTimer()
+        updateNowPlayingInfo()
     }
 
     func resume() {
@@ -213,6 +215,7 @@ final class AudioPlayerService: ObservableObject {
             playerNode.play()
             isPlaying = true
             startProgressTimer()
+            updateNowPlayingInfo()
         } else if let currentTrack {
             Task { await play(currentTrack) }
         }
