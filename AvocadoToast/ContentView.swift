@@ -9,6 +9,7 @@ import SwiftData
 struct ContentView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var catalogPlayer = AudioPlayerService.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -30,7 +31,7 @@ struct ContentView: View {
             .environmentObject(AppTheme.shared)
             .tint(ColorTokens.accentPrimary)
 
-            if AudioPlayerService.shared.currentTrack != nil {
+            if catalogPlayer.currentTrack != nil {
                 MiniPlayerView()
                     .padding(.horizontal, 12)
                     .padding(.bottom, 72)
@@ -38,16 +39,28 @@ struct ContentView: View {
                     .zIndex(2)
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: PlayerService.shared.currentTrack != nil)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: catalogPlayer.currentTrack != nil)
         .sheet(isPresented: $coordinator.showingNowPlaying) {
             NowPlayingView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            coordinator.isPlaying = PlayerService.shared.playbackState == .playing
-            coordinator.currentTrackID = PlayerService.shared.currentTrack?.id
+            syncCoordinatorPlaybackState()
         }
+        .onChange(of: catalogPlayer.currentTrack?.videoId) { _, _ in
+            syncCoordinatorPlaybackState()
+        }
+        .onChange(of: catalogPlayer.isPlaying) { _, _ in
+            syncCoordinatorPlaybackState()
+        }
+    }
+
+    private func syncCoordinatorPlaybackState() {
+        coordinator.isPlaying = catalogPlayer.isPlaying
+        coordinator.currentTrackID = catalogPlayer.currentTrack?.videoId
+        coordinator.showMiniPlayer = catalogPlayer.currentTrack != nil
+        coordinator.playbackState = catalogPlayer.currentTrack == nil ? .idle : (catalogPlayer.isPlaying ? .playing : .paused)
     }
 }
 
