@@ -10,7 +10,7 @@ import Combine
 
 @MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var sections: [HomeSection] = []
+    @Published var tracks: [YouTubeTrack] = []
     @Published var greeting: String?
     @Published var isRefreshing: Bool = false
 
@@ -36,8 +36,8 @@ final class HomeViewModel: ObservableObject {
     }
 
     private func load() async {
-        await catalogService.fetchHomeSections()
-        self.sections = catalogService.homeSections
+        await catalogService.fetchHomeTracks()
+        self.tracks = catalogService.homeTracks
     }
 
     private func updateGreeting() {

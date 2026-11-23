@@ -23,12 +23,23 @@ struct HomeView: View {
                     // Search entry
                     searchEntry
                     
-                    // Sections
-                    if viewModel.sections.isEmpty {
+                    // Featured tracks
+                    if viewModel.tracks.isEmpty {
                         emptyState
                     } else {
-                        ForEach(viewModel.sections) { section in
-                            SectionView(section: section)
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Featured")
+                                .font(.headline.weight(.semibold))
+                                .padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 14) {
+                                    ForEach(viewModel.tracks) { track in
+                                        HomeTrackCard(track: track)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
                         }
                     }
                     
@@ -97,8 +108,51 @@ struct HomeView: View {
 #Preview {
     HomeView()
         .environmentObject(AppCoordinator())
-        .environmentObject(AppTheme())
+        .environmentObject(AppTheme.shared)
 }
+
+// MARK: - Home track card
+
+struct HomeTrackCard: View {
+    let track: YouTubeTrack
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let thumbnailURL = track.thumbnailURL, let url = URL(string: thumbnailURL) {
+                CachedAsyncImage(url: url, size: CGSize(width: 150, height: 150)) { image in
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 150, height: 150)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    } else {
+                        placeholderArtwork
+                    }
+                }
+            } else {
+                placeholderArtwork
+            }
+
+            Text(track.title)
+                .font(.body.weight(.medium))
+                .lineLimit(2)
+            Text(track.artist)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(width: 150)
+    }
+
+    private var placeholderArtwork: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .fill(Color.secondary.opacity(0.15))
+            .frame(width: 150, height: 150)
+    }
+}
+
+// MARK: - View extensions
 
 extension View {
     func hPadding(_ length: CGFloat) -> some View { modifier(HPadding(length: length)) }

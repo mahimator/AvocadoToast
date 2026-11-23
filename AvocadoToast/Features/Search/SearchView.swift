@@ -2,14 +2,12 @@
 //  SearchView.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
+//  Search screen: YouTube Music search with download, save, and playback.
 //
 
 import SwiftUI
 import Combine
 
-/// Search screen: debounced catalog search with category filtering,
-/// recent searches, and result navigation.
 struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel = SearchViewModel()
@@ -20,16 +18,13 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Search bar
                 searchBar
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                // Category selector
                 categorySelector
                     .padding(.horizontal)
 
-                // Content
                 Group {
                     if CatalogService.shared.isSearching {
                         searchingView
@@ -106,7 +101,7 @@ struct SearchView: View {
     private var searchingView: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text("Searching…")
+            Text("Searching YouTube…")
                 .foregroundStyle(.secondary)
         }
         .frame(maxHeight: .infinity)
@@ -117,7 +112,7 @@ struct SearchView: View {
     }
 
     private var emptyPrompt: some View {
-        ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Type a song, artist, album or playlist"))
+        ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Type a song, artist, or album"))
     }
 
     private var recentSearchesView: some View {
@@ -164,66 +159,40 @@ struct SearchView: View {
     }
 
     private var resultsList: some View {
-        List(CatalogService.shared.searchResults) { result in
+        List(CatalogService.shared.searchResults) { track in
             Button(action: {
-                viewModel.select(result)
-                if result.entityType.lowercased() == "song" {
-                    playSong(result)
-                } else {
-                    coordinator.path.append(destination(for: result))
-                }
+                viewModel.select(track)
+                Task { await CatalogService.shared.playTrack(track) }
             }) {
-                SearchResultRow(result: result)
+                SearchResultRow(track: track)
             }
             .buttonStyle(.plain)
             .contextMenu {
-                Button(action: { viewModel.toggleSave(result) }) {
-                    Text(viewModel.isSaved(result) ? "Remove from Library" : "Save to Library")
+                Button(action: {
+                    Task { await CatalogService.shared.toggleDownload(track) }
+                }) {
+                    Text(track.isDownloaded ? "Remove Download" : "Download")
+                }
+                Button(action: {
+                    CatalogService.shared.toggleSave(track)
+                }) {
+                    Text(CatalogService.shared.isSaved(track) ? "Remove from Library" : "Save to Library")
                 }
             }
         }
         .listStyle(.plain)
-    }
-
-    private func destination(for result: SearchResult) -> NavigationDestination {
-        switch result.entityType.lowercased() {
-        case "album": return .albumDetail(result.id)
-        case "artist": return .artistDetail(result.id)
-        case "playlist": return .playlistDetail(result.id)
-        default: return .miniPlayer(result.id)
-        }
-    }
-
-    private func playSong(_ result: SearchResult) {
-        let domain = DomainTrack(
-            id: result.id,
-            provider: result.provider,
-            providerID: result.id,
-            title: result.title,
-            artistName: result.artist,
-            artistIDs: [],
-            albumName: result.album,
-            albumID: nil,
-            artworkURL: result.artworkURL.flatMap { URL(string: $0) },
-            duration: result.duration,
-            isExplicit: result.isExplicit,
-            isVideo: false,
-            isPlayable: result.isPlayable
-        )
-        PlayerService.shared.play(domain)
-        coordinator.showingNowPlaying = true
     }
 }
 
 // MARK: - Search result row
 
 struct SearchResultRow: View {
-    let result: SearchResult
+    let track: YouTubeTrack
 
     var body: some View {
         HStack(spacing: 12) {
-            if let artworkURL = result.artworkURL.flatMap({ URL(string: $0) }) {
-                CachedAsyncImage(url: artworkURL, size: CGSize(width: 56, height: 56)) { image in
+            if let thumbnailURL = track.thumbnailURL, let url = URL(string: thumbnailURL) {
+                CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
                     if let image {
                         Image(uiImage: image)
                             .resizable()
@@ -239,18 +208,24 @@ struct SearchResultRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.title)
+                Text(track.title)
                     .font(.body.weight(.medium))
                     .lineLimit(1)
-                Text(result.displayArtist)
+                Text(track.artist)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
-            Text(result.formattedDuration)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            if track.isDownloaded {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+            } else {
+                Text(track.formattedDuration)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -276,58 +251,28 @@ final class SearchViewModel: ObservableObject {
         self.recentSearches = searchService.recentSearches
     }
 
+    private var searchTask: Task<Void, Never>?
+
     func debounceSearch(_ query: String) {
         searchTask?.cancel()
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000) // 400ms debounce
+            try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             searchNow(query)
         }
     }
 
-    private var searchTask: Task<Void, Never>?
-
     func searchNow(_ query: String) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-        CatalogService.shared.search(query: query, type: nil, limit: 30)
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        CatalogService.shared.search(query: query)
     }
 
-    func select(_ result: SearchResult) {
-        searchService.addRecent(result.title)
-        refreshRecents()
-    }
-
-    func toggleSave(_ result: SearchResult) {
-        let domain = DomainTrack(
-            id: result.id,
-            provider: result.provider,
-            providerID: result.id,
-            title: result.title,
-            artistName: result.artist,
-            artistIDs: [],
-            albumName: result.album,
-            albumID: nil,
-            artworkURL: result.artworkURL.flatMap { URL(string: $0) },
-            duration: result.duration,
-            isExplicit: result.isExplicit,
-            isVideo: false,
-            isPlayable: result.isPlayable
-        )
-        LibraryService.shared.toggleSave(domain)
-    }
-
-    func isSaved(_ result: SearchResult) -> Bool {
-        LibraryService.shared.savedTracks.contains { $0.id == result.id && $0.provider == result.provider }
+    func select(_ track: YouTubeTrack) {
+        searchService.addRecent(track.title)
     }
 
     func clearHistory() {
         searchService.clearHistory()
-        refreshRecents()
-    }
-
-    private func refreshRecents() {
         recentSearches = searchService.recentSearches
     }
 }

@@ -2,132 +2,187 @@
 //  CatalogService.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
+//  Backend-free catalog service using YouTubeKitService (SwiftyTube + InnerTube API).
+//  Communicates directly with YouTube — no PC or backend server required.
 //
 
 import Foundation
 import Combine
 
-/// Central catalog service. All catalog access goes through the backend API
-/// (never directly to ytmusicapi from the client). Results are normalized into
-/// app-domain models before being handed to the UI.
 @MainActor
 final class CatalogService: ObservableObject {
     static let shared = CatalogService()
 
-    @Published var searchResults: [SearchResult] = []
+    private let youtubeService: YouTubeKitService
+    private let localAudioManager: LocalAudioManager
+    private let audioPlayer: AudioPlayerService
+
+    @Published var searchResults: [YouTubeTrack] = []
     @Published var isSearching: Bool = false
     @Published var searchError: String?
 
-    @Published var homeSections: [HomeSection] = []
+    @Published var homeTracks: [YouTubeTrack] = []
     @Published var isLoadingHome: Bool = false
 
-    let apiClient: APIClient
-    private var currentSearchTask: Task<Void, Never>?
+    // MARK: - Library (local persistence)
 
-    init(apiClient: APIClient = .shared) {
-        self.apiClient = apiClient
+    @Published var savedTracks: [YouTubeTrack] = []
+
+    func toggleSave(_ track: YouTubeTrack) {
+        if let idx = savedTracks.firstIndex(where: { $0.videoId == track.videoId }) {
+            savedTracks.remove(at: idx)
+        } else {
+            savedTracks.append(track)
+        }
+    }
+
+    func isSaved(_ track: YouTubeTrack) -> Bool {
+        savedTracks.contains { $0.videoId == track.videoId }
+    }
+
+    init(youtubeService: YouTubeKitService = .shared,
+         localAudioManager: LocalAudioManager = .shared,
+         audioPlayer: AudioPlayerService = .shared) {
+        self.youtubeService = youtubeService
+        self.localAudioManager = localAudioManager
+        self.audioPlayer = audioPlayer
     }
 
     // MARK: - Search
 
-    func search(query: String, type: SearchType? = nil, limit: Int = 20) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+    func search(query: String, type: SearchType? = nil, limit: Int = 25) {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             searchError = "Query cannot be empty"
             searchResults = []
             isSearching = false
             return
         }
-        guard trimmed.count <= 200 else {
-            searchError = "Query too long (max 200 characters)"
-            searchResults = []
-            isSearching = false
-            return
-        }
-
-        // Cancel any in-flight search so stale results never overwrite newer ones
-        currentSearchTask?.cancel()
 
         isSearching = true
         searchError = nil
+        searchResults = []
 
-        currentSearchTask = Task {
-            do {
-                let apiResults: [SearchResult] = try await apiClient.request(
-                    .search(query: trimmed, type: type, limit: limit)
-                )
-                // Guard against cancellation / stale response
-                guard !Task.isCancelled else { return }
-                self.searchResults = apiResults
-            } catch is CancellationError {
-                // Expected when a newer search supersedes this one
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                self.searchError = error.localizedDescription
-                self.searchResults = []
-            }
+        Task {
+            let results = await youtubeService.search(term: query, limit: limit)
+            guard !Task.isCancelled else { return }
+            self.searchResults = results
             self.isSearching = false
         }
     }
 
+    func searchYouTube(query: String, limit: Int = 25) async -> [YouTubeTrack] {
+        await youtubeService.search(term: query, limit: limit)
+    }
+
     func cancelSearch() {
-        currentSearchTask?.cancel()
-        currentSearchTask = nil
         isSearching = false
     }
 
     // MARK: - Home
 
-    func fetchHomeSections() async {
+    func fetchHomeTracks() async {
         isLoadingHome = true
         defer { isLoadingHome = false }
-        do {
-            let response: HomeResponse = try await apiClient.request(.home)
-            self.homeSections = response.sections
-        } catch {
-            // Home is non-critical; keep showing cached / empty sections
-            self.homeSections = []
+
+        let trending = ["music 2024", "top songs", "popular music", "new releases"]
+        var allTracks: [YouTubeTrack] = []
+
+        for term in trending.prefix(3) {
+            let results = await youtubeService.search(term: term, limit: 10)
+            allTracks.append(contentsOf: results)
+        }
+
+        var seen = Set<String>()
+        homeTracks = allTracks.filter { seen.insert($0.id).inserted }
+    }
+
+    // MARK: - Stream resolution & playback
+
+    func resolveStream(for track: YouTubeTrack) async -> String? {
+        let streamURL = await youtubeService.resolveStream(videoId: track.videoId)
+        return streamURL
+    }
+
+    func playTrack(_ track: YouTubeTrack) async {
+        var trackToPlay = track
+        if trackToPlay.streamURL == nil {
+            let streamURL = await resolveStream(for: track)
+            trackToPlay.streamURL = streamURL
+        }
+
+        if let localPath = localAudioManager.localFilePath(for: track.videoId) {
+            trackToPlay.localFileURL = localPath
+            trackToPlay.isDownloaded = true
+        }
+
+        await audioPlayer.play(trackToPlay)
+    }
+
+    func downloadTrack(_ track: YouTubeTrack) async {
+        guard let streamURL = track.streamURL else {
+            let resolved = await resolveStream(for: track)
+            guard let resolvedURL = resolved else { return }
+            await localAudioManager.download(track, streamURL: resolvedURL)
+            return
+        }
+        await localAudioManager.download(track, streamURL: streamURL)
+    }
+
+    func toggleDownload(_ track: YouTubeTrack) async {
+        if track.isDownloaded {
+            localAudioManager.deleteLocalFile(videoId: track.videoId)
+        } else {
+            await downloadTrack(track)
         }
     }
 
-    // MARK: - Details
-
-    func fetchTrack(id: String) async throws -> TrackResponse {
-        try await apiClient.request(.song(id: id))
+    func getRecommendations(for track: YouTubeTrack) async -> [YouTubeTrack] {
+        await youtubeService.recommendations(for: track.videoId)
     }
 
-    func fetchAlbum(id: String) async throws -> AlbumResponse {
-        try await apiClient.request(.album(id: id))
+    // MARK: - Playback control
+
+    func play() {
+        audioPlayer.resume()
     }
 
-    func fetchArtist(id: String) async throws -> ArtistResponse {
-        try await apiClient.request(.artist(id: id))
+    func pause() {
+        audioPlayer.pause()
     }
 
-    func fetchPlaylist(id: String) async throws -> PlaylistResponse {
-        try await apiClient.request(.playlist(id: id))
+    func togglePlayPause() {
+        audioPlayer.togglePlayPause()
     }
 
-    func fetchRelated(id: String) async throws -> [MusicEntity] {
-        try await apiClient.request(.related(id: id))
+    func stop() {
+        audioPlayer.stop()
     }
 
-    func fetchLyrics(id: String) async throws -> LyricsResponse {
-        try await apiClient.request(.lyrics(id: id))
+    func seek(to time: Double) {
+        audioPlayer.seek(to: time)
     }
 
-    func fetchCharts() async throws -> ChartsResponse {
-        try await apiClient.request(.charts)
+    func setEQGain(band: Int, gain: Float) {
+        audioPlayer.setEQGain(band: band, gain: gain)
     }
 
-    func checkHealth() async throws -> HealthResponse {
-        try await apiClient.request(.health)
+    func setEQPreset(_ preset: EQPreset) {
+        audioPlayer.setEQPreset(preset)
     }
 }
 
-// MARK: - Domain track wrapper (used by player / library)
+// MARK: - Search type
+
+enum SearchType: String, CaseIterable {
+    case songs = "songs"
+    case videos = "videos"
+    case albums = "albums"
+    case artists = "artists"
+    case playlists = "playlists"
+    case all = "all"
+}
+
+// MARK: - Domain track (legacy compatibility)
 
 struct DomainTrack: Identifiable, Equatable, Hashable {
     let id: String
@@ -143,22 +198,6 @@ struct DomainTrack: Identifiable, Equatable, Hashable {
     let isExplicit: Bool
     let isVideo: Bool
     let isPlayable: Bool
-
-    init(from api: TrackResponse) {
-        self.id = api.id
-        self.provider = api.provider
-        self.providerID = api.providerID
-        self.title = api.title
-        self.artistName = api.artistName
-        self.artistIDs = api.artistIDs
-        self.albumName = api.albumName
-        self.albumID = api.albumID
-        self.artworkURL = api.artworkURL.flatMap { URL(string: $0) }
-        self.duration = api.duration
-        self.isExplicit = api.explicit ?? false
-        self.isVideo = api.isVideo
-        self.isPlayable = api.isPlayable
-    }
 
     init(id: String, provider: String, providerID: String, title: String, artistName: String,
          artistIDs: [String] = [], albumName: String? = nil, albumID: String? = nil,
@@ -189,20 +228,26 @@ struct DomainTrack: Identifiable, Equatable, Hashable {
     }
 }
 
-// MARK: - Convenience extensions on API search result
+// MARK: - EQ preset
 
-extension SearchResult {
-    var entityType: String { type }
-    var duration: Double? { durationSeconds }
-    var isExplicit: Bool { explicit ?? false }
-    var isPlayable: Bool { playable }
-    var formattedDuration: String {
-        guard let d = durationSeconds, d > 0 else { return "—" }
-        let total = Int(d)
-        let m = total / 60, s = total % 60
-        return m > 0 ? "\(m):\(s < 10 ? "0" : "")\(s)" : "\(s)s"
+enum EQPreset: String, CaseIterable, Identifiable {
+    case flat = "Flat"
+    case bassBoost = "Bass Boost"
+    case vocal = "Vocal"
+    case trebleBoost = "Treble Boost"
+    case acoustic = "Acoustic"
+    case electronic = "Electronic"
+
+    var id: String { rawValue }
+
+    var gains: [Float] {
+        switch self {
+        case .flat: return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        case .bassBoost: return [6, 4, 2, 0, -2, -4, -6, -8, -10, -12]
+        case .vocal: return [-4, -2, 0, 2, 4, 2, 0, -2, -4, -6]
+        case .trebleBoost: return [-12, -10, -8, -6, -4, -2, 0, 2, 4, 6]
+        case .acoustic: return [-2, 0, 2, 4, 2, 0, -2, -4, -6, -8]
+        case .electronic: return [4, 2, 0, -2, -4, 0, 2, 4, 2, 0]
+        }
     }
-    var displayArtist: String { artist.isEmpty ? "Unknown Artist" : artist }
-    var displayAlbum: String { album ?? "Single" }
 }
-

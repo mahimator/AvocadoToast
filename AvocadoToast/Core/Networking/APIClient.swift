@@ -91,7 +91,7 @@ final class APIClient: ObservableObject {
 // API Endpoint enum
 enum APIEndpoint {
     case health
-    case search(query: String, type: SearchType?, limit: Int?)
+    case search(query: String, type: String?, limit: Int?)
     case home
     case song(id: String)
     case album(id: String)
@@ -110,7 +110,7 @@ enum APIEndpoint {
             request.httpMethod = "GET"
             var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
             var queryItems: [URLQueryItem] = [URLQueryItem(name: "q", value: query)]
-            if let type = type { queryItems.append(URLQueryItem(name: "type", value: type.rawValue)) }
+            if let type = type { queryItems.append(URLQueryItem(name: "type", value: type)) }
             if let limit = limit { queryItems.append(URLQueryItem(name: "limit", value: "\(limit)")) }
             components.queryItems = queryItems
             request.url = components.url
@@ -154,12 +154,4 @@ enum APIError: LocalizedError {
     }
 }
 
-// SearchType enum - defined once project-wide
-enum SearchType: String, CaseIterable {
-    case songs = "songs"
-    case videos = "videos"
-    case albums = "albums"
-    case artists = "artists"
-    case playlists = "playlists"
-    case all = "all"
-}
+// SearchType is defined in CatalogService.swift

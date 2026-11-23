@@ -82,9 +82,9 @@ struct ContentView: View {
         case .library:
             LibraryView()
         case .albumDetail(let id):
-            AlbumDetailView(albumID: id)
+            AlbumDetailView(query: id)
         case .artistDetail(let id):
-            ArtistDetailView(artistID: id)
+            ArtistDetailView(query: id)
         case .playlistDetail(let id):
             PlaylistDetailView(playlistID: id)
         case .miniPlayer:

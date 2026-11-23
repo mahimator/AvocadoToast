@@ -2,13 +2,12 @@
 //  PlaylistDetailView.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
+//  Playlist detail using YouTube tracks.
 //
 
 import SwiftUI
 import Combine
 
-/// Playlist detail screen: artwork, metadata, track list and playback actions.
 struct PlaylistDetailView: View {
     let playlistID: String
     @StateObject private var viewModel = PlaylistDetailViewModel()
@@ -24,26 +23,19 @@ struct PlaylistDetailView: View {
                 ContentUnavailableView("Playlist not found", systemImage: "music.note.list")
             }
         }
-        .navigationTitle(viewModel.playlist?.title ?? "Playlist")
+        .navigationTitle(viewModel.playlist?.first?.title ?? "Playlist")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load(playlistID: playlistID) }
     }
 
     @ViewBuilder
-    private func playlistContent(_ playlist: PlaylistResponse) -> some View {
+    private func playlistContent(_ playlist: [YouTubeTrack]) -> some View {
         ScrollView {
             VStack(spacing: 20) {
-                artworkView(playlist)
-
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(playlist.title)
+                    Text(playlist.first?.title ?? "Playlist")
                         .font(.title2.weight(.bold))
-                    if let description = playlist.description, !description.isEmpty {
-                        Text(description)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("\(playlist.trackCount) tracks · \(playlist.creator)")
+                    Text("\(playlist.count) tracks")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -51,14 +43,18 @@ struct PlaylistDetailView: View {
                 .padding(.horizontal)
 
                 HStack(spacing: 16) {
-                    Button(action: { viewModel.playPlaylist() }) {
-                        Label("Play Playlist", systemImage: "play.circle.fill")
+                    Button(action: {
+                        Task { await viewModel.playAll() }
+                    }) {
+                        Label("Play All", systemImage: "play.circle.fill")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
 
-                    Button(action: { viewModel.toggleSave() }) {
+                    Button(action: {
+                        viewModel.toggleSaveAll()
+                    }) {
                         Label(viewModel.isSaved ? "Saved" : "Save", systemImage: viewModel.isSaved ? "checkmark" : "plus")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
@@ -67,16 +63,16 @@ struct PlaylistDetailView: View {
                 }
                 .padding(.horizontal)
 
-                if !playlist.tracks.isEmpty {
+                if !playlist.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Tracks")
                             .font(.headline)
                             .padding(.horizontal)
-                        ForEach(Array(playlist.tracks.enumerated()), id: \.element.id) { index, track in
-                            PlaylistTrackRow(track: track, number: index + 1)
+                        ForEach(playlist) { track in
+                            PlaylistTrackRow(track: track)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    viewModel.playTrack(track)
+                                    Task { await CatalogService.shared.playTrack(track) }
                                 }
                         }
                     }
@@ -86,48 +82,18 @@ struct PlaylistDetailView: View {
             }
         }
     }
-
-    @ViewBuilder
-    private func artworkView(_ playlist: PlaylistResponse) -> some View {
-        if let artworkURL = playlist.artworkURL.flatMap({ URL(string: $0) }) {
-            CachedAsyncImage(url: artworkURL, size: CGSize(width: 300, height: 300)) { image in
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 300, height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 8)
-                } else {
-                    placeholderArtwork
-                }
-            }
-        } else {
-            placeholderArtwork
-        }
-    }
-
-    private var placeholderArtwork: some View {
-        RoundedRectangle(cornerRadius: 20)
-            .fill(Color.secondary.opacity(0.15))
-            .frame(width: 300, height: 300)
-    }
 }
 
 // MARK: - Playlist track row
 
 struct PlaylistTrackRow: View {
-    let track: TrackResponse
-    let number: Int
+    let track: YouTubeTrack
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(number)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, alignment: .leading)
-            if let artworkURL = track.artworkURL.flatMap({ URL(string: $0) }) {
-                CachedAsyncImage(url: artworkURL, size: CGSize(width: 44, height: 44)) { image in
+            Text("").frame(width: 24)
+            if let thumbnailURL = track.thumbnailURL, let url = URL(string: thumbnailURL) {
+                CachedAsyncImage(url: url, size: CGSize(width: 44, height: 44)) { image in
                     if let image {
                         Image(uiImage: image)
                             .resizable()
@@ -143,13 +109,11 @@ struct PlaylistTrackRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title).font(.body).lineLimit(1)
-                Text(track.artistName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            if let duration = track.duration {
-                Text(duration.formattedDuration)
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            Text(track.formattedDuration)
+                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
@@ -161,11 +125,11 @@ struct PlaylistTrackRow: View {
     }
 }
 
-// MARK: - Playlist detail view model
+// MARK: - Playlist view model
 
 @MainActor
 final class PlaylistDetailViewModel: ObservableObject {
-    @Published var playlist: PlaylistResponse?
+    @Published var playlist: [YouTubeTrack]?
     @Published var isLoading: Bool = false
     @Published var isSaved: Bool = false
 
@@ -178,51 +142,24 @@ final class PlaylistDetailViewModel: ObservableObject {
     func load(playlistID: String) async {
         isLoading = true
         defer { isLoading = false }
-        do {
-            playlist = try await catalogService.fetchPlaylist(id: playlistID)
-        } catch {
-            print("Playlist load failed: \(error)")
+        // In a real app, this would fetch a playlist by ID from YouTube
+        // For now, we search for the playlist ID as a query
+        let results = await catalogService.searchYouTube(query: playlistID, limit: 20)
+        self.playlist = results
+    }
+
+    func playAll() {
+        guard let playlist = playlist else { return }
+        if let first = playlist.first {
+            Task { await CatalogService.shared.playTrack(first) }
         }
     }
 
-    func playPlaylist() {
+    func toggleSaveAll() {
         guard let playlist = playlist else { return }
-        let tracks = playlist.tracks.map { DomainTrack(from: $0) }
-        PlayerService.shared.setQueue(tracks, startAt: 0)
-        PlayerService.shared.playEngine()
-    }
-
-    func playTrack(_ track: TrackResponse) {
-        PlayerService.shared.play(DomainTrack(from: track))
-    }
-
-    func toggleSave() {
-        guard let playlist = playlist else { return }
-        let saved = LibraryService.shared.savedPlaylists
-        let already = saved.contains { $0.id == playlist.id && $0.provider == playlist.provider }
-        if already {
-            if let existing = saved.first(where: { $0.id == playlist.id && $0.provider == playlist.provider }) {
-                LibraryService.shared.deletePlaylist(existing)
-            }
-        } else {
-            let model = PlaylistModel(
-                id: playlist.id, name: playlist.title,
-                playlistDescription: playlist.description,
-                artworkURL: playlist.artworkURL, creator: playlist.creator,
-                provider: playlist.provider, providerID: playlist.providerID,
-                trackIDs: playlist.tracks.map { $0.id },
-                tracks: playlist.tracks.map { t in
-                    TrackModel(id: t.id, provider: t.provider, providerID: t.providerID,
-                               title: t.title, artistName: t.artistName, artistIDs: t.artistIDs,
-                               albumName: t.albumName, albumID: t.albumID, artworkURL: t.artworkURL,
-                               duration: t.duration, explicit: t.explicit, isVideo: t.isVideo,
-                               isPlayable: t.isPlayable)
-                },
-                isEditable: playlist.isEditable,
-                metadata: playlist.metadata ?? [:], providerIdentifiers: playlist.providerIdentifiers ?? [:]
-            )
-            LibraryService.shared.savePlaylist(model)
+        for track in playlist {
+            CatalogService.shared.toggleSave(track)
         }
-        isSaved = LibraryService.shared.savedPlaylists.contains { $0.id == playlist.id && $0.provider == playlist.provider }
+        isSaved = CatalogService.shared.isSaved(playlist.first ?? YouTubeTrack(videoId: "", title: "", artist: ""))
     }
 }
