@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var showingResetConfirmation = false
     @State private var resetMessage: String?
     @State private var cacheMessage: String?
+    @State private var showGoogleLogin = false
+    @ObservedObject private var accountSession = YouTubeAccountSession.shared
 
     var body: some View {
         NavigationStack {
@@ -26,6 +28,30 @@ struct SettingsView: View {
                     Toggle("Artwork ambience", isOn: $config.artworkBackgroundEnabled)
                     Toggle("Reduce Motion", isOn: $config.reduceMotion)
                     Toggle("Glass Effects", isOn: $config.enableGlassEffects)
+                }
+                Section("YouTube Account") {
+                    if accountSession.isSignedIn {
+                        LabeledContent("Account", value: accountSession.account?.name ?? "Signed in")
+                        if let email = accountSession.account?.email {
+                            LabeledContent("Email", value: email)
+                        }
+                        Button("Reconnect Google Account") { showGoogleLogin = true }
+                        Button("Sign out", role: .destructive) {
+                            Task { await accountSession.signOut() }
+                        }
+                    } else {
+                        LabeledContent("Account", value: "Guest")
+                        Button {
+                            showGoogleLogin = true
+                        } label: {
+                            Label("Sign in with Google", systemImage: "person.crop.circle.badge.check")
+                        }
+                        Text("Sign in to access your personal YouTube Music library and playlists.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let status = accountSession.statusMessage {
+                        Text(status).font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Section("Storage") {
                     Button("Clear artwork cache", systemImage: "photo") {
@@ -48,6 +74,12 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showGoogleLogin) {
+                YouTubeGoogleLoginSheet()
+            }
+            .task {
+                await accountSession.restore()
+            }
             .confirmationDialog("Delete your local library?", isPresented: $showingResetConfirmation, titleVisibility: .visible) {
                 Button("Delete library and imported audio", role: .destructive) { resetLibrary() }
                 Button("Cancel", role: .cancel) {}
