@@ -167,13 +167,14 @@ final class CatalogService: ObservableObject {
         }
 
         let trending = ["new music", "popular songs", "new releases"]
-        let results = await withTaskGroup(of: [YouTubeTrack].self) { group in
-            for term in trending {
-                group.addTask { await self.youtubeService.search(term: term, limit: 10) }
+        let service = youtubeService
+        let results = await withTaskGroup(of: (Int, [YouTubeTrack]).self) { group in
+            for (index, term) in trending.enumerated() {
+                group.addTask { (index, await service.search(term: term, limit: 10)) }
             }
-            var combined: [YouTubeTrack] = []
-            for await tracks in group { combined.append(contentsOf: tracks) }
-            return combined
+            var batches: [(Int, [YouTubeTrack])] = []
+            for await batch in group { batches.append(batch) }
+            return batches.sorted { $0.0 < $1.0 }.flatMap { $0.1 }
         }
         guard homeRequestID == requestID else { return }
         var seen = Set<String>()
