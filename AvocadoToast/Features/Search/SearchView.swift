@@ -153,7 +153,7 @@ struct SearchView: View {
             ForEach(recentSearches, id: \.self) { term in
                 Button {
                     query = term
-                    viewModel.searchNow(term)
+                    viewModel.searchNow(term, type: selectedCategory)
                 } label: {
                     Label(term, systemImage: "clock.arrow.circlepath")
                         .foregroundStyle(ColorTokens.textPrimary)
