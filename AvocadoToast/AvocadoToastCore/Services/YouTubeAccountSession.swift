@@ -67,12 +67,18 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
                 isSignedIn = true
                 statusMessage = nil
             } else {
+                keychainDelete()
                 account = nil
                 isSignedIn = false
+                await YouTubeKitService.shared.useGuestSession()
                 statusMessage = "Saved Google session expired. Sign in again."
             }
         } catch {
-            statusMessage = "Couldn't verify saved Google session."
+            keychainDelete()
+            account = nil
+            isSignedIn = false
+            await YouTubeKitService.shared.useGuestSession()
+            statusMessage = "Couldn't verify saved Google session. Sign in again."
         }
     }
 
