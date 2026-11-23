@@ -12,6 +12,8 @@ struct NowPlayingView: View {
     @ObservedObject private var player = AudioPlayerService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var ambientColor: Color = ColorTokens.accentPrimary.opacity(0.22)
+    @State private var showingQueue = false
+    @ObservedObject private var catalog = CatalogService.shared
     @ObservedObject private var config = AppConfig.shared
 
     var body: some View {
@@ -35,8 +37,10 @@ struct NowPlayingView: View {
                             .padding(.horizontal, 28)
                             .padding(.top, 24)
 
-                        playbackButton
+                        playbackControls
                             .padding(.top, 26)
+                        secondaryControls
+                            .padding(.top, 18)
 
                         if let error = player.errorMessage, !error.isEmpty {
                             Text(error)
@@ -60,6 +64,11 @@ struct NowPlayingView: View {
         .preferredColorScheme(.dark)
         .task(id: player.currentTrack?.thumbnailURL) {
             await updateAmbientColor(for: player.currentTrack?.thumbnailURL)
+        }
+        .sheet(isPresented: $showingQueue) {
+            QueueSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -175,6 +184,66 @@ struct NowPlayingView: View {
         .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play")
     }
 
+    private var playbackControls: some View {
+        HStack(spacing: 28) {
+            playerSkipButton(symbol: "backward.fill", label: "Previous track") {
+                catalog.playPrevious()
+            }
+            Button { player.togglePlayPause() } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(ColorTokens.backgroundPrimary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 76, height: 76)
+                    .background(ambientColor, in: Circle())
+                    .shadow(color: ambientColor.opacity(0.3), radius: 18, y: 7)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play")
+            playerSkipButton(symbol: "forward.fill", label: "Next track") {
+                catalog.playNext()
+            }
+        }
+    }
+
+    private var secondaryControls: some View {
+        HStack(spacing: 0) {
+            Button { catalog.toggleShuffle() } label: {
+                Image(systemName: "shuffle")
+                    .foregroundStyle(catalog.shuffleEnabled ? ambientColor : .white.opacity(0.65))
+                    .frame(width: 52, height: 42)
+            }
+            .accessibilityLabel(catalog.shuffleEnabled ? "Turn shuffle off" : "Turn shuffle on")
+            Spacer()
+            Button { catalog.cycleRepeatMode() } label: {
+                Image(systemName: catalog.repeatMode == .one ? "repeat.1" : "repeat")
+                    .foregroundStyle(catalog.repeatMode == .off ? .white.opacity(0.65) : ambientColor)
+                    .frame(width: 52, height: 42)
+            }
+            .accessibilityLabel("Repeat mode: \(catalog.repeatMode.rawValue)")
+            Spacer()
+            Button { showingQueue = true } label: {
+                Image(systemName: "list.bullet")
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 52, height: 42)
+            }
+            .accessibilityLabel("Open queue")
+        }
+        .padding(.horizontal, 36)
+    }
+
+    private func playerSkipButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.white.opacity(0.88))
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
     private var artworkPlaceholder: some View {
         RoundedRectangle(cornerRadius: 30, style: .continuous)
             .fill(ColorTokens.surfaceElevated)
@@ -218,5 +287,67 @@ extension TimeInterval {
         let minutes = secondsTotal / 60
         let seconds = secondsTotal % 60
         return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
+    }
+}
+
+
+private struct QueueSheet: View {
+    @ObservedObject private var catalog = CatalogService.shared
+    @ObservedObject private var player = AudioPlayerService.shared
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if catalog.playbackQueue.isEmpty {
+                    ContentUnavailableView("Queue is empty", systemImage: "music.note.list", description: Text("Play a playlist to fill the queue."))
+                } else {
+                    ForEach(Array(catalog.playbackQueue.enumerated()), id: \.offset) { index, track in
+                        Button {
+                            Task { await catalog.playQueue(catalog.playbackQueue, startAt: index) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                if let url = track.thumbnailURL.flatMap(URL.init(string:)) {
+                                    CachedAsyncImage(url: url, size: CGSize(width: 48, height: 48)) { image in
+                                        if let image {
+                                            Image(uiImage: image).resizable().scaledToFill()
+                                                .frame(width: 48, height: 48)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        } else {
+                                            queueArtworkPlaceholder
+                                        }
+                                    }
+                                } else {
+                                    queueArtworkPlaceholder
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(track.title)
+                                        .lineLimit(1)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(track.artist)
+                                        .lineLimit(1)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if index == catalog.queueIndex {
+                                    Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
+                                        .foregroundStyle(ColorTokens.accentPrimary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Up next")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var queueArtworkPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(ColorTokens.surfaceElevated)
+            .frame(width: 48, height: 48)
+            .overlay(Image(systemName: "music.note").foregroundStyle(.secondary))
     }
 }
