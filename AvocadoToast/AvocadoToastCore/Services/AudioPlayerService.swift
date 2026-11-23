@@ -223,8 +223,11 @@ final class AudioPlayerService: ObservableObject {
 
     func stop() {
         stopPlaybackOnly()
+        currentTrack = nil
         currentTime = 0
         duration = 0
+        errorMessage = nil
+        updateNowPlayingInfo()
     }
 
     private func stopPlaybackOnly() {
