@@ -8,6 +8,8 @@
 import Foundation
 import Combine
 import UIKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 /// Artwork loading service with memory + disk cache.
 /// - Asynchronous, non-blocking loading
@@ -23,6 +25,8 @@ final class ArtworkService: ObservableObject {
     private let fileManager = FileManager.default
     private let queue = DispatchQueue(label: "com.avocadotoast.artwork", qos: .userInitiated)
     private let maxMemoryCount = 100
+    private let colorContext = CIContext(options: [.cacheIntermediates: false])
+    private var colorCache: [String: UIColor] = [:]
 
     private init() {
         memoryCache.countLimit = maxMemoryCount
@@ -62,6 +66,32 @@ final class ArtworkService: ObservableObject {
     /// Synchronous memory-cache lookup (useful for scrollable lists).
     func imageInMemory(for url: URL) -> UIImage? {
         memoryCache.object(forKey: url as NSURL)
+    }
+
+    /// Returns a softly sampled average artwork colour for ambient player styling.
+    /// Average colour is intentionally used instead of a complex palette extractor:
+    /// it is cheap, stable, and can be safely blended into the player backdrop.
+    func ambientColor(from url: URL) async -> Color? {
+        let key = url.absoluteString
+        if let cached = colorCache[key] { return Color(cached) }
+        guard let image = await loadArtwork(from: url, size: CGSize(width: 64, height: 64)),
+              let ciImage = CIImage(image: image) else { return nil }
+        let filter = CIFilter.areaAverage()
+        filter.inputImage = ciImage
+        filter.extent = ciImage.extent
+        guard let output = filter.outputImage,
+              let pixel = colorContext.createCGImage(output, from: CGRect(x: 0, y: 0, width: 1, height: 1)),
+              let data = pixel.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data) else { return nil }
+        let color = UIColor(
+            red: CGFloat(bytes[0]) / 255,
+            green: CGFloat(bytes[1]) / 255,
+            blue: CGFloat(bytes[2]) / 255,
+            alpha: 1
+        )
+        colorCache[key] = color
+        if colorCache.count > 100 { colorCache.removeValue(forKey: colorCache.keys.first ?? key) }
+        return Color(color)
     }
 
     func clearCache() {
