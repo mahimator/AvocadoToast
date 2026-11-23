@@ -484,15 +484,8 @@ private struct LocalPlaylistDetailView: View {
                             subtitle: track.artistName,
                             artworkURL: track.artworkURL.flatMap(URL.init(string:)),
                             onTap: {
-                                guard track.provider == "youtube" else { return }
-                                let item = YouTubeTrack(
-                                    videoId: track.providerID.isEmpty ? track.id : track.providerID,
-                                    title: track.title,
-                                    artist: track.artistName,
-                                    duration: track.duration ?? 0,
-                                    thumbnailURL: track.artworkURL
-                                )
-                                Task { await CatalogService.shared.playTrack(item) }
+                                guard let index = queueTracks.firstIndex(where: { $0.videoId == track.id || $0.videoId == track.providerID }) else { return }
+                                Task { await CatalogService.shared.playQueue(queueTracks, startAt: index) }
                             }
                         )
                         .contextMenu {
