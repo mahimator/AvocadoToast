@@ -174,9 +174,13 @@ struct LibraryRow: View {
     let artworkURL: URL?
     var onTap: (() -> Void)? = nil
 
-
     var body: some View {
-        rowContent
+        if let onTap {
+            Button(action: onTap) { rowContent }
+                .buttonStyle(.plain)
+        } else {
+            rowContent
+        }
     }
 
     private var rowContent: some View {
@@ -197,9 +201,6 @@ struct LibraryRow: View {
         .padding(.vertical, 6)
         .listRowBackground(ColorTokens.backgroundSecondary)
         .contentShape(Rectangle())
-        .ifLet(onTap) { view, action in
-            view.onTapGesture(perform: action)
-        }
     }
 
     @ViewBuilder
