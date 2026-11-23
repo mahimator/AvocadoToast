@@ -9,6 +9,10 @@
 import Foundation
 import Combine
 
+enum QueueRepeatMode: String, CaseIterable {
+    case off, all, one
+}
+
 @MainActor
 final class CatalogService: ObservableObject {
     static let shared = CatalogService()
