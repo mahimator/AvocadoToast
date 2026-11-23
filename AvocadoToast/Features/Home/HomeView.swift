@@ -137,66 +137,78 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeading("On repeat", subtitle: "A little something to start")
             if let featured = viewModel.tracks.first {
-                Button {
-                    Task { await CatalogService.shared.playTrack(featured) }
-                } label: {
-                    ZStack(alignment: .bottomLeading) {
-                        CachedAsyncImage(url: featured.thumbnailURL.flatMap(URL.init(string:)), size: CGSize(width: 360, height: 230)) { image in
-                            if let image {
-                                Image(uiImage: image).resizable().scaledToFill()
-                            } else {
-                                ColorTokens.accentPrimary.opacity(0.2)
-                            }
-                        }
-                        .frame(height: 228)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                        .overlay {
-                            LinearGradient(colors: [.clear, .black.opacity(0.78)], startPoint: .center, endPoint: .bottom)
-                        }
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("FEATURED TRACK")
-                                .font(.system(size: 10, weight: .bold))
-                                .tracking(1.8)
-                                .foregroundStyle(.white.opacity(0.75))
-                            Text(featured.title)
-                                .font(.title2.bold())
-                                .lineLimit(2)
-                            Text(featured.artist)
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(18)
-                        HStack {
-                            Spacer()
-                            Image(systemName: "play.fill")
-                                .font(.title2)
-                                .foregroundStyle(.black)
-                                .frame(width: 54, height: 54)
-                                .background(ColorTokens.accentPrimary, in: Circle())
-                                .padding(18)
-                        }
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.12)))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button { CatalogService.shared.playNextInQueue(featured) } label: {
-                        Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                    }
-                    Button { CatalogService.shared.addToQueue(featured) } label: {
-                        Label("Add to queue", systemImage: "text.badge.plus")
-                    }
-                    Button { CatalogService.shared.toggleSave(featured) } label: {
-                        Label(CatalogService.shared.isSaved(featured) ? "Remove from Library" : "Save to Library",
-                              systemImage: CatalogService.shared.isSaved(featured) ? "heart.slash" : "heart")
-                    }
+                featuredCard(featured)
             }
         }
     }
+
+    private func featuredCard(_ track: YouTubeTrack) -> some View {
+        Button {
+            Task { await CatalogService.shared.playTrack(track) }
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                CachedAsyncImage(url: track.thumbnailURL.flatMap(URL.init(string:)), size: CGSize(width: 360, height: 230)) { image in
+                    if let image {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    } else {
+                        ColorTokens.accentPrimary.opacity(0.2)
+                    }
+                }
+                .frame(height: 228)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay {
+                    LinearGradient(colors: [.clear, .black.opacity(0.78)], startPoint: .center, endPoint: .bottom)
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("FEATURED TRACK")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1.8)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(track.title)
+                        .font(.title2.bold())
+                        .lineLimit(2)
+                    Text(track.artist)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .foregroundStyle(.white)
+                .padding(18)
+                HStack {
+                    Spacer()
+                    Image(systemName: "play.fill")
+                        .font(.title2)
+                        .foregroundStyle(.black)
+                        .frame(width: 54, height: 54)
+                        .background(ColorTokens.accentPrimary, in: Circle())
+                        .padding(18)
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                CatalogService.shared.playNextInQueue(track)
+            } label: {
+                Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            Button {
+                CatalogService.shared.addToQueue(track)
+            } label: {
+                Label("Add to queue", systemImage: "text.badge.plus")
+            }
+            Button {
+                CatalogService.shared.toggleSave(track)
+            } label: {
+                Label(
+                    CatalogService.shared.isSaved(track) ? "Remove from Library" : "Save to Library",
+                    systemImage: CatalogService.shared.isSaved(track) ? "heart.slash" : "heart"
+                )
+            }
+        }
     }
 
     private var freshSection: some View {
