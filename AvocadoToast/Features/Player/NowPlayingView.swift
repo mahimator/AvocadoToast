@@ -388,7 +388,7 @@ private struct QueueSheet: View {
                     Button("Clear Upcoming") {
                         confirmingClearUpcoming = true
                     }
-                    .disabled(catalog.playbackQueue.count <= catalog.queueIndex + 1)
+                    .disabled(catalog.shuffleEnabled ? catalog.playbackQueue.count <= 1 : catalog.playbackQueue.count <= catalog.queueIndex + 1)
                 }
             }
             .confirmationDialog("Clear upcoming tracks?", isPresented: $confirmingClearUpcoming, titleVisibility: .visible) {
