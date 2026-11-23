@@ -7,6 +7,7 @@ import SwiftUI
 
 struct MiniPlayerView: View {
     @ObservedObject private var player = AudioPlayerService.shared
+    @ObservedObject private var config = AppConfig.shared
     @EnvironmentObject private var coordinator: AppCoordinator
 
     var body: some View {
@@ -38,7 +39,7 @@ struct MiniPlayerView: View {
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 }
                 .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(config.enableGlassEffects ? ColorTokens.surfaceGlass : ColorTokens.backgroundSecondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .strokeBorder(ColorTokens.textPrimary.opacity(0.08))
