@@ -94,13 +94,14 @@ struct HomeView: View {
                 HStack(spacing: 12) {
                     ForEach(library.recentlyPlayed.prefix(12), id: \.id) { track in
                         Button {
-                            guard track.provider == "youtube" else { return }
                             let item = YouTubeTrack(
-                                videoId: track.providerID,
+                                videoId: track.provider == "local" ? track.id : track.providerID,
                                 title: track.title,
                                 artist: track.artistName,
                                 duration: track.duration,
-                                thumbnailURL: track.artworkURL
+                                thumbnailURL: track.artworkURL,
+                                localFileURL: track.provider == "local" ? track.providerID : nil,
+                                provider: track.provider
                             )
                             Task { await CatalogService.shared.playTrack(item) }
                         } label: {
@@ -195,6 +196,7 @@ struct HomeView: View {
                     }
             }
         }
+    }
     }
 
     private var freshSection: some View {
