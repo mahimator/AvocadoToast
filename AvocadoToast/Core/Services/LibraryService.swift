@@ -104,6 +104,21 @@ final class LibraryService: ObservableObject {
         savedTracks.contains { $0.id == id && $0.provider == provider }
     }
 
+    func toggleSaveYouTubeTrack(_ track: YouTubeTrack) {
+        let domain = DomainTrack(
+            id: track.videoId,
+            provider: "youtube",
+            providerID: track.videoId,
+            title: track.title,
+            artistName: track.artist,
+            artworkURL: track.thumbnailURL.flatMap { URL(string: $0) },
+            duration: track.duration,
+            isVideo: true,
+            isPlayable: true
+        )
+        toggleSave(domain)
+    }
+
     func toggleSave(_ domain: DomainTrack) {
         if isTrackSaved(id: domain.id, provider: domain.provider) {
             removeTrack(by: domain.id, provider: domain.provider)
