@@ -2,20 +2,27 @@
 //  LocalAudioManager.swift
 //  AvocadoToast
 //
-//  Manages downloading YouTube audio streams to local storage for offline playback.
+//  Owns user-imported audio files. The app copies files into its sandbox and
+//  never downloads catalog audio for offline playback.
 //
 
 import Foundation
+import AVFoundation
 import Combine
+
+struct ImportedAudio {
+    let id: String
+    let fileURL: URL
+    let title: String
+    let artist: String
+    let duration: Double
+}
 
 @MainActor
 final class LocalAudioManager: ObservableObject {
     static let shared = LocalAudioManager()
 
     private let fileManager = FileManager.default
-
-    @Published var downloadingIDs: Set<String> = []
-
     private let audioDir: URL
 
     private init() {
@@ -24,45 +31,74 @@ final class LocalAudioManager: ObservableObject {
         try? fileManager.createDirectory(at: audioDir, withIntermediateDirectories: true, attributes: nil)
     }
 
-    private func localFileURL(for videoId: String) -> URL {
-        audioDir.appendingPathComponent("\(videoId).m4a")
-    }
+    func importAudio(from sourceURL: URL) throws -> ImportedAudio {
+        let hasAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
 
-    func localFilePath(for videoId: String) -> String? {
-        let url = localFileURL(for: videoId)
-        return fileManager.fileExists(atPath: url.path) ? url.path : nil
-    }
+        let allowedExtensions = ["mp3", "m4a", "aac", "wav", "aiff", "caf", "flac"]
+        let fileExtension = sourceURL.pathExtension.lowercased()
+        guard allowedExtensions.contains(fileExtension) else {
+            throw LocalAudioImportError.unsupportedFormat
+        }
 
-    func isDownloaded(videoId: String) -> Bool {
-        fileManager.fileExists(atPath: localFileURL(for: videoId).path)
-    }
-
-    func download(_ track: YouTubeTrack, streamURL: String) async {
-        guard !downloadingIDs.contains(track.videoId) else { return }
-        downloadingIDs.insert(track.videoId)
-        defer { downloadingIDs.remove(track.videoId) }
-
-        let fileURL = localFileURL(for: track.videoId)
+        let id = UUID().uuidString
+        let destination = audioDir.appendingPathComponent(id).appendingPathExtension(fileExtension)
+        try fileManager.copyItem(at: sourceURL, to: destination)
 
         do {
-            let (tempURL, response) = try await URLSession.shared.download(from: URL(string: streamURL)!)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                return
-            }
-
-            try fileManager.moveItem(at: tempURL, to: fileURL)
+            let audioFile = try AVAudioFile(forReading: destination)
+            let duration = audioFile.processingFormat.sampleRate > 0
+                ? Double(audioFile.length) / audioFile.processingFormat.sampleRate
+                : 0
+            let asset = AVURLAsset(url: destination)
+            let title = AVMetadataItem.metadataItems(
+                from: asset.commonMetadata,
+                withKey: AVMetadataKey.commonKeyTitle,
+                keySpace: .common
+            ).first?.stringValue ?? sourceURL.deletingPathExtension().lastPathComponent
+            let artist = AVMetadataItem.metadataItems(
+                from: asset.commonMetadata,
+                withKey: AVMetadataKey.commonKeyArtist,
+                keySpace: .common
+            ).first?.stringValue ?? "Unknown Artist"
+            return ImportedAudio(id: id, fileURL: destination, title: title, artist: artist, duration: duration)
         } catch {
-            print("Download error: \(error.localizedDescription)")
+            try? fileManager.removeItem(at: destination)
+            throw error
         }
     }
 
-    func cancelDownload(videoId: String) {
-        downloadingIDs.remove(videoId)
+    func localFilePath(for id: String) -> String? {
+        let url = audioDir.appendingPathComponent("\(id).m4a")
+        return fileManager.fileExists(atPath: url.path) ? url.path : nil
     }
 
     func deleteLocalFile(videoId: String) {
-        let url = localFileURL(for: videoId)
+        // Retained for old cache entries only.
+        let url = audioDir.appendingPathComponent("\(videoId).m4a")
         try? fileManager.removeItem(at: url)
+    }
+
+    func deleteImportedAudio(at path: String) {
+        let root = audioDir.standardizedFileURL.path + "/"
+        let candidate = URL(fileURLWithPath: path).standardizedFileURL
+        guard candidate.path.hasPrefix(root) else { return }
+        try? fileManager.removeItem(at: candidate)
+    }
+
+    func clearImportedAudio() {
+        guard let files = try? fileManager.contentsOfDirectory(at: audioDir, includingPropertiesForKeys: nil) else { return }
+        for file in files { try? fileManager.removeItem(at: file) }
+    }
+}
+
+enum LocalAudioImportError: LocalizedError {
+    case unsupportedFormat
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedFormat:
+            return "This audio format isn't supported. Try MP3, M4A, AAC, WAV, AIFF, CAF or FLAC."
+        }
     }
 }
