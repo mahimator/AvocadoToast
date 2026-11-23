@@ -44,6 +44,7 @@ final class CatalogService: ObservableObject {
     private var activeSearchID: UUID?
     private var shuffleHistory: [Int] = []
     private var shuffleDeck: [Int] = []
+    private var homeRequestID: UUID?
 
     var canPlayPrevious: Bool { queueIndex > 0 || repeatMode == .all || (shuffleEnabled && !shuffleHistory.isEmpty) }
     var canPlayNext: Bool { (shuffleEnabled && playbackQueue.count > 1 && (!shuffleDeck.isEmpty || repeatMode == .all)) || queueIndex + 1 < playbackQueue.count || repeatMode == .all }
@@ -154,19 +155,28 @@ final class CatalogService: ObservableObject {
     // MARK: - Home
 
     func fetchHomeTracks() async {
+        let requestID = UUID()
+        homeRequestID = requestID
         isLoadingHome = true
-        defer { isLoadingHome = false }
-
-        let trending = ["new music", "popular songs", "new releases"]
-        var allTracks: [YouTubeTrack] = []
-
-        for term in trending.prefix(3) {
-            let results = await youtubeService.search(term: term, limit: 10)
-            allTracks.append(contentsOf: results)
+        defer {
+            if homeRequestID == requestID {
+                isLoadingHome = false
+                homeRequestID = nil
+            }
         }
 
+        let trending = ["new music", "popular songs", "new releases"]
+        let results = await withTaskGroup(of: [YouTubeTrack].self) { group in
+            for term in trending {
+                group.addTask { await self.youtubeService.search(term: term, limit: 10) }
+            }
+            var combined: [YouTubeTrack] = []
+            for await tracks in group { combined.append(contentsOf: tracks) }
+            return combined
+        }
+        guard homeRequestID == requestID else { return }
         var seen = Set<String>()
-        homeTracks = allTracks.filter { seen.insert($0.id).inserted }
+        homeTracks = results.filter { seen.insert($0.id).inserted }
     }
 
     // MARK: - Stream resolution & playback
