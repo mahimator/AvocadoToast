@@ -26,6 +26,14 @@ final class YouTubeKitService: ObservableObject {
         self.client = InnerTubeClient(config: config, auth: .guest)
     }
 
+    // MARK: - Home discovery
+
+    /// Returns the real YouTube Music Home response as a discovery source.
+    /// Presentation and shelf selection stay owned by Avocado Toast.
+    func fetchMusicHome() async throws -> [String: Any] {
+        try await client.browse(browseId: "FEmusic_home", client: config.defaultClient)
+    }
+
     // MARK: - Search
 
     func search(term: String, limit: Int = 25) async -> [YouTubeTrack] {
