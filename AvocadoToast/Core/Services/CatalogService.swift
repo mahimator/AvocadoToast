@@ -370,27 +370,3 @@ struct DomainTrack: Identifiable, Equatable, Hashable {
         hasher.combine(provider)
     }
 }
-
-// MARK: - EQ preset
-
-enum EQPreset: String, CaseIterable, Identifiable {
-    case flat = "Flat"
-    case bassBoost = "Bass Boost"
-    case vocal = "Vocal"
-    case trebleBoost = "Treble Boost"
-    case acoustic = "Acoustic"
-    case electronic = "Electronic"
-
-    var id: String { rawValue }
-
-    var gains: [Float] {
-        switch self {
-        case .flat: return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        case .bassBoost: return [6, 4, 2, 0, -2, -4, -6, -8, -10, -12]
-        case .vocal: return [-4, -2, 0, 2, 4, 2, 0, -2, -4, -6]
-        case .trebleBoost: return [-12, -10, -8, -6, -4, -2, 0, 2, 4, 6]
-        case .acoustic: return [-2, 0, 2, 4, 2, 0, -2, -4, -6, -8]
-        case .electronic: return [4, 2, 0, -2, -4, 0, 2, 4, 2, 0]
-        }
-    }
-}
