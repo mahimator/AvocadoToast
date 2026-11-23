@@ -32,6 +32,7 @@ struct Shadow {
 }
 
 struct GlassBackground: View {
+    @ObservedObject private var config = AppConfig.shared
     let blur: CGFloat
     let opacity: Double
     let cornerRadius: CGFloat
@@ -46,8 +47,14 @@ struct GlassBackground: View {
 
     var body: some View {
         Rectangle()
-            .fill(ColorTokens.textPrimary.opacity(opacity))
-            .background(.ultraThinMaterial)
+            .fill(ColorTokens.textPrimary.opacity(config.enableGlassEffects ? opacity : 0.12))
+            .background {
+                if config.enableGlassEffects {
+                    Rectangle().fill(.ultraThinMaterial)
+                } else {
+                    ColorTokens.backgroundSecondary
+                }
+            }
             .mask(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .frame(maxWidth: expanded ? .infinity : nil, maxHeight: expanded ? 200 : 100)
             .overlay {
@@ -62,6 +69,7 @@ struct GlassBackground: View {
 }
 
 struct GlassCard<Content: View>: View {
+    @ObservedObject private var config = AppConfig.shared
     let cornerRadius: CGFloat
     let opacity: Double
     let showsShadow: Bool
