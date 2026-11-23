@@ -35,6 +35,10 @@ final class AudioPlayerService: ObservableObject {
     private var bufferIsLoaded = false
     private var isRemotePlayback = false
     private var progressTimer: Timer?
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
+    private var itemStatusObservation: NSKeyValueObservation?
+    private var shouldResumeAfterInterruption = false
 
     private let eqFrequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
     @Published var eqGains: [Float] = Array(repeating: 0, count: 10)
@@ -52,6 +56,7 @@ final class AudioPlayerService: ObservableObject {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
             try session.setActive(true)
+            setupSessionObservers(session)
         } catch {
             errorMessage = "Audio session setup failed: \(error.localizedDescription)"
         }
@@ -104,6 +109,7 @@ final class AudioPlayerService: ObservableObject {
                       (notification.object as? AVPlayerItem) === self.remotePlayer.currentItem else { return }
                 self.isPlaying = false
                 self.currentTime = self.duration
+                self.updateNowPlayingInfo()
                 self.onPlaybackFinished?()
             }
         }
@@ -177,6 +183,7 @@ final class AudioPlayerService: ObservableObject {
                 self.isPlaying = false
                 self.currentTime = self.duration
                 self.stopProgressTimer()
+                self.updateNowPlayingInfo()
                 self.onPlaybackFinished?()
             }
         }
@@ -291,6 +298,55 @@ final class AudioPlayerService: ObservableObject {
         updateNowPlayingInfo()
     }
 
+    // MARK: - Audio session lifecycle
+
+    private func setupSessionObservers(_ session: AVAudioSession) {
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                guard let self,
+                      let info = notification.userInfo,
+                      let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+                switch type {
+                case .began:
+                    self.shouldResumeAfterInterruption = self.isPlaying
+                    if self.isPlaying { self.pause() }
+                case .ended:
+                    let rawOptions = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+                    let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+                    if self.shouldResumeAfterInterruption && options.contains(.shouldResume) {
+                        self.resume()
+                    }
+                    self.shouldResumeAfterInterruption = false
+                @unknown default:
+                    self.shouldResumeAfterInterruption = false
+                }
+            }
+        }
+
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                guard let self,
+                      let info = notification.userInfo,
+                      let rawReason = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                      AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable,
+                      let previousRoute = info[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription else { return }
+                let wasPersonalAudio = previousRoute.outputs.contains { output in
+                    [.headphones, .bluetoothA2DP, .bluetoothLE, .bluetoothHFP, .usbAudio].contains(output.portType)
+                }
+                if wasPersonalAudio && self.isPlaying { self.pause() }
+            }
+        }
+    }
+
     // MARK: - Lock Screen / headset / car controls
 
     private func configureRemoteCommands() {
@@ -384,6 +440,9 @@ final class AudioPlayerService: ObservableObject {
         if let finishObserver {
             NotificationCenter.default.removeObserver(finishObserver)
         }
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
+        itemStatusObservation?.invalidate()
         progressTimer?.invalidate()
         playerNode.stop()
         engine.stop()
