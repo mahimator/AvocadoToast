@@ -326,6 +326,7 @@ extension TimeInterval {
 private struct QueueSheet: View {
     @ObservedObject private var catalog = CatalogService.shared
     @ObservedObject private var player = AudioPlayerService.shared
+    @State private var confirmingClearUpcoming = false
 
     var body: some View {
         NavigationStack {
@@ -368,8 +369,32 @@ private struct QueueSheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                catalog.removeQueuedTrack(at: index)
+                            } label: {
+                                Label("Remove", systemImage: "trash")
+                            }
+                            .disabled(index == catalog.queueIndex)
+                        }
                     }
                 }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Clear Upcoming") {
+                        confirmingClearUpcoming = true
+                    }
+                    .disabled(catalog.playbackQueue.count <= catalog.queueIndex + 1)
+                }
+            }
+            .confirmationDialog("Clear upcoming tracks?", isPresented: $confirmingClearUpcoming, titleVisibility: .visible) {
+                Button("Clear Upcoming", role: .destructive) {
+                    catalog.clearUpcoming()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The current song will keep playing.")
             }
             .navigationTitle("Up next")
             .navigationBarTitleDisplayMode(.inline)
