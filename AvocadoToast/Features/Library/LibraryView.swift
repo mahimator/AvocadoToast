@@ -122,7 +122,8 @@ struct LibraryView: View {
             case .songs:
                 ForEach(library.savedTracks, id: \.id) { track in
                     LibraryRow(title: track.title, subtitle: track.artistName,
-                               artworkURL: track.artworkURL.flatMap(URL.init(string:)))
+                               artworkURL: track.artworkURL.flatMap(URL.init(string:)),
+                               onTap: { playSavedTrack(track) })
                         .contextMenu {
                             Button(role: .destructive) { library.removeTrack(track) } label: {
                                 Label("Remove from library", systemImage: "trash")
@@ -141,9 +142,13 @@ struct LibraryView: View {
                 }
             case .playlists:
                 ForEach(library.savedPlaylists, id: \.id) { playlist in
-                    LibraryRow(title: playlist.name, subtitle: "\(playlist.trackIDs.count) tracks",
-                               artworkURL: playlist.artworkURL.flatMap(URL.init(string:)))
-                        .contextMenu {
+                    NavigationLink {
+                        LocalPlaylistDetailView(playlist: playlist)
+                    } label: {
+                        LibraryRow(title: playlist.name, subtitle: "\(playlist.trackIDs.count) tracks",
+                                  artworkURL: playlist.artworkURL.flatMap(URL.init(string:)))
+                    }
+                    .contextMenu {
                             Button(role: .destructive) { library.deletePlaylist(playlist) } label: {
                                 Label("Delete playlist", systemImage: "trash")
                             }
@@ -152,7 +157,8 @@ struct LibraryView: View {
             case .recent:
                 ForEach(library.recentlyPlayed, id: \.id) { track in
                     LibraryRow(title: track.title, subtitle: track.artistName,
-                               artworkURL: track.artworkURL.flatMap(URL.init(string:)))
+                               artworkURL: track.artworkURL.flatMap(URL.init(string:)),
+                               onTap: { playSavedTrack(track) })
                 }
             }
         }
@@ -166,8 +172,14 @@ struct LibraryRow: View {
     let title: String
     let subtitle: String
     let artworkURL: URL?
+    var onTap: (() -> Void)? = nil
+
 
     var body: some View {
+        rowContent
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 12) {
             artwork
             VStack(alignment: .leading, spacing: 4) {
@@ -184,6 +196,10 @@ struct LibraryRow: View {
         }
         .padding(.vertical, 6)
         .listRowBackground(ColorTokens.backgroundSecondary)
+        .contentShape(Rectangle())
+        .ifLet(onTap) { view, action in
+            view.onTapGesture(perform: action)
+        }
     }
 
     @ViewBuilder
@@ -287,6 +303,173 @@ struct NewPlaylistView: View {
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Library playback
+
+private extension LibraryView {
+    func playSavedTrack(_ model: TrackModel) {
+        guard model.provider == "youtube" else { return }
+        let track = YouTubeTrack(
+            videoId: model.providerID.isEmpty ? model.id : model.providerID,
+            title: model.title,
+            artist: model.artistName,
+            duration: model.duration ?? 0,
+            thumbnailURL: model.artworkURL
+        )
+        Task { await CatalogService.shared.playTrack(track) }
+    }
+}
+
+// MARK: - Local playlist detail
+
+private struct LocalPlaylistDetailView: View {
+    let playlist: PlaylistModel
+    @ObservedObject private var library = LibraryService.shared
+    @State private var showingAddTracks = false
+    @State private var showingRename = false
+    @State private var newName = ""
+
+    private var tracks: [TrackModel] {
+        playlist.trackIDs.compactMap { id in
+            library.savedTracks.first(where: { $0.id == id })
+        }
+    }
+
+    private var queueTracks: [YouTubeTrack] {
+        tracks.compactMap { model in
+            guard model.provider == "youtube" else { return nil }
+            return YouTubeTrack(
+                videoId: model.providerID.isEmpty ? model.id : model.providerID,
+                title: model.title,
+                artist: model.artistName,
+                duration: model.duration ?? 0,
+                thumbnailURL: model.artworkURL
+            )
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(playlist.name)
+                        .font(.title2.bold())
+                    Text("\(tracks.count) saved songs")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        Button {
+                            Task { await CatalogService.shared.playQueue(queueTracks) }
+                        } label: {
+                            Label("Play playlist", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(queueTracks.isEmpty)
+                        Button {
+                            showingAddTracks = true
+                        } label: {
+                            Label("Add songs", systemImage: "plus")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            Section("Songs") {
+                if tracks.isEmpty {
+                    ContentUnavailableView("This playlist is empty", systemImage: "music.note.list", description: Text("Add songs you've saved in your library."))
+                } else {
+                    ForEach(tracks, id: \.id) { track in
+                        LibraryRow(
+                            title: track.title,
+                            subtitle: track.artistName,
+                            artworkURL: track.artworkURL.flatMap(URL.init(string:)),
+                            onTap: {
+                                guard track.provider == "youtube" else { return }
+                                let item = YouTubeTrack(
+                                    videoId: track.providerID.isEmpty ? track.id : track.providerID,
+                                    title: track.title,
+                                    artist: track.artistName,
+                                    duration: track.duration ?? 0,
+                                    thumbnailURL: track.artworkURL
+                                )
+                                Task { await CatalogService.shared.playTrack(item) }
+                            }
+                        )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                library.removeTrackFromPlaylist(playlist, trackId: track.id)
+                            } label: {
+                                Label("Remove from playlist", systemImage: "minus.circle")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(playlist.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Rename") {
+                    newName = playlist.name
+                    showingRename = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddTracks) {
+            PlaylistTrackPicker(playlist: playlist)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("Rename playlist", isPresented: $showingRename) {
+            TextField("Playlist name", text: $newName)
+            Button("Save") {
+                let cleaned = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty { library.renamePlaylist(playlist, to: cleaned) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+}
+
+private struct PlaylistTrackPicker: View {
+    let playlist: PlaylistModel
+    @ObservedObject private var library = LibraryService.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(library.savedTracks, id: \.id) { track in
+                    Button {
+                        library.addTrackToPlaylist(playlist, track: track)
+                    } label: {
+                        HStack(spacing: 12) {
+                            LibraryRow(title: track.title, subtitle: track.artistName, artworkURL: track.artworkURL.flatMap(URL.init(string:)))
+                            if playlist.trackIDs.contains(track.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(ColorTokens.accentPrimary)
+                            } else {
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(playlist.trackIDs.contains(track.id))
+                }
+            }
+            .navigationTitle("Add songs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
                 }
             }
         }
