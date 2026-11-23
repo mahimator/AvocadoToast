@@ -136,15 +136,24 @@ final class PlaylistDetailViewModel: ObservableObject {
     @Published var isSaved: Bool = false
 
     private let catalogService: CatalogService
+    private var activeLoadID: UUID?
 
     init(catalogService: CatalogService = .shared) {
         self.catalogService = catalogService
     }
 
     func load(playlistID: String) async {
+        let requestID = UUID()
+        activeLoadID = requestID
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if activeLoadID == requestID {
+                isLoading = false
+                activeLoadID = nil
+            }
+        }
         let result = await YouTubeKitService.shared.fetchPlaylistTracks(playlistID: playlistID)
+        guard activeLoadID == requestID else { return }
         self.playlistTitle = result.title
         self.playlist = result.tracks
         isSaved = !result.tracks.isEmpty && result.tracks.allSatisfy { catalogService.isSaved($0) }
