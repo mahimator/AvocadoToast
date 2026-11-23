@@ -233,7 +233,8 @@ final class CatalogService: ObservableObject {
             homeTracks = candidates.filter { seen.insert($0.videoId).inserted }.prefix(36).map { $0 }
         } catch {
             guard homeRequestID == requestID else { return }
-            homeTracks = []
+            // Preserve the last good feed so a transient network/API failure
+            // does not blank the home screen during refresh.
             homeError = error.localizedDescription
         }
     }
