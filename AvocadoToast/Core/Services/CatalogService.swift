@@ -247,7 +247,7 @@ final class CatalogService: ObservableObject {
             guard let shuffledNext = shuffleDeck.first else { return }
             shuffleDeck.removeFirst()
             nextIndex = shuffledNext
-            shuffleHistory.append(queueIndex)
+            recordShuffleHistory(queueIndex)
         } else if queueIndex + 1 < playbackQueue.count {
             nextIndex = queueIndex + 1
         } else if repeatMode == .all {
@@ -317,6 +317,14 @@ final class CatalogService: ObservableObject {
         shuffleDeck.removeAll()
         if shuffleEnabled {
             shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
+        }
+    }
+
+    private func recordShuffleHistory(_ index: Int) {
+        shuffleHistory.append(index)
+        let historyLimit = max(100, playbackQueue.count * 3)
+        if shuffleHistory.count > historyLimit {
+            shuffleHistory.removeFirst(shuffleHistory.count - historyLimit)
         }
     }
 
