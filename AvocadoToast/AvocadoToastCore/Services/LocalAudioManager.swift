@@ -8,6 +8,7 @@
 
 import Foundation
 import AVFoundation
+import UIKit
 import Combine
 
 struct ImportedAudio {
@@ -16,6 +17,7 @@ struct ImportedAudio {
     let title: String
     let artist: String
     let duration: Double
+    let artworkURL: String?
 }
 
 @MainActor
@@ -57,11 +59,25 @@ final class LocalAudioManager: ObservableObject {
                 keySpace: .common
             ).first?.stringValue ?? sourceURL.deletingPathExtension().lastPathComponent
             let artist = AVMetadataItem.metadataItems(
-                from: asset.commonMetadata,
+                from: metadata,
                 withKey: AVMetadataKey.commonKeyArtist,
                 keySpace: .common
             ).first?.stringValue ?? "Unknown Artist"
-            return ImportedAudio(id: id, fileURL: destination, title: title, artist: artist, duration: duration)
+            let artworkData = AVMetadataItem.metadataItems(
+                from: metadata,
+                withKey: AVMetadataKey.commonKeyArtwork,
+                keySpace: .common
+            ).first?.dataValue
+            let artworkPath: String?
+            if let artworkData, UIImage(data: artworkData) != nil {
+                let artworkFile = audioDir.appendingPathComponent("\(id).artwork")
+                    .appendingPathExtension("jpg")
+                try? artworkData.write(to: artworkFile, options: .atomic)
+                artworkPath = artworkFile.absoluteString
+            } else {
+                artworkPath = nil
+            }
+            return ImportedAudio(id: id, fileURL: destination, title: title, artist: artist, duration: duration, artworkURL: artworkPath)
         } catch {
             try? fileManager.removeItem(at: destination)
             throw error
@@ -78,6 +94,8 @@ final class LocalAudioManager: ObservableObject {
         let candidate = URL(fileURLWithPath: path).standardizedFileURL
         guard candidate.path.hasPrefix(root) else { return }
         try? fileManager.removeItem(at: candidate)
+        let artwork = audioDir.appendingPathComponent(candidate.deletingPathExtension().lastPathComponent + ".artwork.jpg")
+        try? fileManager.removeItem(at: artwork)
     }
 
     func clearImportedAudio() {
