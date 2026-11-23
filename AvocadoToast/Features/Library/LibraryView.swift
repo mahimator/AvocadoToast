@@ -500,12 +500,16 @@ private struct LocalPlaylistDetailView: View {
                             }
                         }
                     }
+                    .onMove { offsets, destination in
+                        library.moveTrackInPlaylist(playlist, from: offsets, to: destination)
+                    }
                 }
             }
         }
         .navigationTitle(playlist.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { EditButton() }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Rename") {
                     newName = playlist.name
