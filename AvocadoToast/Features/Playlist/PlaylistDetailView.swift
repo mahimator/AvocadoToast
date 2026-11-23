@@ -23,7 +23,7 @@ struct PlaylistDetailView: View {
                 ContentUnavailableView("Playlist not found", systemImage: "music.note.list")
             }
         }
-        .navigationTitle(viewModel.playlist?.first?.title ?? "Playlist")
+        .navigationTitle(viewModel.playlistTitle ?? "Playlist")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load(playlistID: playlistID) }
     }
@@ -33,7 +33,7 @@ struct PlaylistDetailView: View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(playlist.first?.title ?? "Playlist")
+                    Text(viewModel.playlistTitle ?? "Playlist")
                         .font(.title2.weight(.bold))
                     Text("\(playlist.count) tracks")
                         .font(.subheadline)
@@ -131,6 +131,7 @@ struct PlaylistTrackRow: View {
 @MainActor
 final class PlaylistDetailViewModel: ObservableObject {
     @Published var playlist: [YouTubeTrack]?
+    @Published var playlistTitle: String?
     @Published var isLoading: Bool = false
     @Published var isSaved: Bool = false
 
@@ -143,10 +144,14 @@ final class PlaylistDetailViewModel: ObservableObject {
     func load(playlistID: String) async {
         isLoading = true
         defer { isLoading = false }
-        // In a real app, this would fetch a playlist by ID from YouTube
-        // For now, we search for the playlist ID as a query
-        let results = await catalogService.searchYouTube(query: playlistID, limit: 20)
-        self.playlist = results
+        let result = await YouTubeKitService.shared.fetchPlaylistTracks(playlistID: playlistID)
+        self.playlistTitle = result.title
+        self.playlist = result.tracks
+        if let first = result.tracks.first {
+            isSaved = result.tracks.allSatisfy { catalogService.isSaved($0) }
+        } else {
+            isSaved = false
+        }
     }
 
     func playAll() {
