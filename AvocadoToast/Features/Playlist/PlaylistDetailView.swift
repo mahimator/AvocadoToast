@@ -55,7 +55,7 @@ struct PlaylistDetailView: View {
                     Button(action: {
                         viewModel.toggleSaveAll()
                     }) {
-                        Label(viewModel.isSaved ? "Saved" : "Save", systemImage: viewModel.isSaved ? "checkmark" : "plus")
+                        Label(viewModel.isSaved ? "Tracks saved" : "Save tracks", systemImage: viewModel.isSaved ? "checkmark" : "plus")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
@@ -155,10 +155,16 @@ final class PlaylistDetailViewModel: ObservableObject {
     }
 
     func toggleSaveAll() {
-        guard let playlist = playlist else { return }
+        guard let playlist, !playlist.isEmpty else { return }
+        let catalog = CatalogService.shared
+        let allSaved = playlist.allSatisfy { catalog.isSaved($0) }
         for track in playlist {
-            CatalogService.shared.toggleSave(track)
+            if allSaved && catalog.isSaved(track) {
+                catalog.toggleSave(track)
+            } else if !allSaved && !catalog.isSaved(track) {
+                catalog.toggleSave(track)
+            }
         }
-        isSaved = CatalogService.shared.isSaved(playlist.first ?? YouTubeTrack(videoId: "", title: "", artist: ""))
+        isSaved = playlist.allSatisfy { catalog.isSaved($0) }
     }
 }
