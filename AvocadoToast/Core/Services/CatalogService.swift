@@ -52,7 +52,9 @@ final class CatalogService: ObservableObject {
                     title: item.title,
                     artist: item.artistName,
                     duration: item.duration ?? 0,
-                    thumbnailURL: item.artworkURL
+                    thumbnailURL: item.artworkURL,
+                    localFileURL: item.provider == "local" ? item.providerID : nil,
+                    provider: item.provider
                 )
             }
     }
@@ -165,7 +167,9 @@ final class CatalogService: ObservableObject {
 
     private func playQueueItem(_ track: YouTubeTrack) async {
         var prepared = track
-        if let localPath = localAudioManager.localFilePath(for: track.videoId) {
+        if track.provider == "local" {
+            // Imported files carry their sandbox URL in localFileURL.
+        } else if let localPath = localAudioManager.localFilePath(for: track.videoId) {
             prepared.localFileURL = localPath
             prepared.isDownloaded = true
         } else if prepared.streamURL == nil {
@@ -232,24 +236,6 @@ final class CatalogService: ObservableObject {
         } else if repeatMode == .all {
             queueIndex = 0
             Task { await playQueueItem(playbackQueue[queueIndex]) }
-        }
-    }
-
-    func downloadTrack(_ track: YouTubeTrack) async {
-        guard let streamURL = track.streamURL else {
-            let resolved = await resolveStream(for: track)
-            guard let resolvedURL = resolved else { return }
-            await localAudioManager.download(track, streamURL: resolvedURL)
-            return
-        }
-        await localAudioManager.download(track, streamURL: streamURL)
-    }
-
-    func toggleDownload(_ track: YouTubeTrack) async {
-        if track.isDownloaded {
-            localAudioManager.deleteLocalFile(videoId: track.videoId)
-        } else {
-            await downloadTrack(track)
         }
     }
 
