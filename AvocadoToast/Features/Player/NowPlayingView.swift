@@ -108,7 +108,7 @@ struct NowPlayingView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
-                    .background(.thinMaterial, in: Circle())
+                    .background(config.enableGlassEffects ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.22)))
             }
             .accessibilityLabel("Close player")
@@ -255,7 +255,7 @@ struct NowPlayingView: View {
                 .foregroundStyle(.white.opacity(0.86))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 11)
-                .background(.thinMaterial, in: Capsule())
+                .background(config.enableGlassEffects ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
         }
         .buttonStyle(.plain)
@@ -306,7 +306,7 @@ struct NowPlayingView: View {
                 startRadius: 0,
                 endRadius: 360
             )
-            Rectangle().fill(.ultraThinMaterial).opacity(0.12)
+            Rectangle().fill(config.enableGlassEffects ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear)).opacity(config.enableGlassEffects ? 0.12 : 0)
         }
         .ignoresSafeArea()
         .animation(config.reduceMotion ? nil : .easeInOut(duration: 0.8), value: ambientColor)
