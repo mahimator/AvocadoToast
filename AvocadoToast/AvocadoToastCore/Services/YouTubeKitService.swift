@@ -26,6 +26,18 @@ final class YouTubeKitService: ObservableObject {
         self.client = InnerTubeClient(config: config, auth: .guest)
     }
 
+    func loadSavedSession() async {
+        await client.loadState(from: YouTubeAccountSession.shared)
+    }
+
+    func fetchAccountInfo() async throws -> AccountInfo {
+        try await client.accountInfo(client: config.defaultClient)
+    }
+
+    func useGuestSession() async {
+        await client.updateAuth(.guest)
+    }
+
     // MARK: - Home discovery
 
     /// Returns the real YouTube Music Home response as a discovery source.
