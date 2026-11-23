@@ -8,6 +8,7 @@ import SwiftUI
 @MainActor
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var library = LibraryService.shared
     @EnvironmentObject private var theme: AppTheme
     @EnvironmentObject private var coordinator: AppCoordinator
 
@@ -17,6 +18,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     masthead
                     searchLauncher
+                    if !library.recentlyPlayed.isEmpty { recentlyPlayedSection }
                     if !viewModel.tracks.isEmpty {
                         featuredSection
                         freshSection
@@ -83,6 +85,51 @@ struct HomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.14)))
         }
         .buttonStyle(.plain)
+    }
+
+    private var recentlyPlayedSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeading("Back on the toast", subtitle: "Pick up where you left off")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(library.recentlyPlayed.prefix(12), id: \.id) { track in
+                        Button {
+                            guard track.provider == "youtube" else { return }
+                            let item = YouTubeTrack(
+                                videoId: track.providerID,
+                                title: track.title,
+                                artist: track.artistName,
+                                duration: track.duration,
+                                thumbnailURL: track.artworkURL
+                            )
+                            Task { await CatalogService.shared.playTrack(item) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                CachedAsyncImage(url: track.artworkURL.flatMap(URL.init(string:)), size: CGSize(width: 128, height: 128)) { image in
+                                    if let image {
+                                        Image(uiImage: image).resizable().scaledToFill()
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 16).fill(ColorTokens.artworkPlaceholder)
+                                    }
+                                }
+                                .frame(width: 128, height: 128)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                Text(track.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(2)
+                                    .foregroundStyle(.primary)
+                                Text(track.artistName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 128, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
     }
 
     private var featuredSection: some View {
