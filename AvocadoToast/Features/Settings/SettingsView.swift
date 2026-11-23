@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import SwiftyTube
 
 struct SettingsView: View {
     @ObservedObject private var config = AppConfig.shared

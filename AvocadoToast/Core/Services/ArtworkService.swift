@@ -151,9 +151,22 @@ final class ArtworkService: ObservableObject {
     }
 
     private func resize(_ image: UIImage, to size: CGSize) -> UIImage {
+        // Aspect-fill crop: scale to cover the target size, then center-crop.
+        // This prevents thumbnails from being stretched when the source
+        // artwork is not square.
+        let imageSize = image.size
+        let widthRatio = size.width / imageSize.width
+        let heightRatio = size.height / imageSize.height
+        let scaleFactor = max(widthRatio, heightRatio)
+        let scaledWidth = imageSize.width * scaleFactor
+        let scaledHeight = imageSize.height * scaleFactor
+        let x = (size.width - scaledWidth) / 2
+        let y = (size.height - scaledHeight) / 2
+        let scaledRect = CGRect(x: x, y: y, width: scaledWidth, height: scaledHeight)
+
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+            image.draw(in: scaledRect)
         }
     }
 }

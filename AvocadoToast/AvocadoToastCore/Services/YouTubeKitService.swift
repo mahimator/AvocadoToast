@@ -43,7 +43,17 @@ final class YouTubeKitService: ObservableObject {
     /// Returns the real YouTube Music Home response as a discovery source.
     /// Presentation and shelf selection stay owned by Avocado Toast.
     func fetchMusicHome() async throws -> [String: Any] {
-        try await client.browse(browseId: "FEmusic_home", client: config.defaultClient)
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        var lastError: Error?
+        for client in clients {
+            do {
+                return try await self.client.browse(browseId: "FEmusic_home", client: client)
+            } catch {
+                lastError = error
+                continue
+            }
+        }
+        throw lastError ?? InnerTubeError.invalidResponse
     }
 
     // MARK: - Search
@@ -53,38 +63,58 @@ final class YouTubeKitService: ObservableObject {
         searchError = nil
         defer { isSearching = false }
 
-        do {
-            let json = try await client.search(query: term, client: config.defaultClient)
-            // Music search returns musicResponsiveListItemRenderer rows, not
-            // ordinary videoRenderer rows. Parse Music rows first, then use the
-            // general parser as a fallback for mixed/legacy results.
-            let songs = LibraryBrowseParser.parseSongs(from: json)
-            if !songs.isEmpty {
-                var seen = Set<String>()
-                return songs.filter { seen.insert($0.videoId).inserted }
-                    .prefix(limit).map { song in
+        // Try multiple YouTube clients — Music search may be restricted on some
+        // clients but work on others. Guest mode especially needs a fallback.
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+
+        var lastError: Error?
+
+        for client in clients {
+            do {
+                let json = try await self.client.search(query: term, client: client)
+
+                // Music search returns musicResponsiveListItemRenderer rows, not
+                // ordinary videoRenderer rows. Parse Music rows first, then use the
+                // general parser as a fallback for mixed/legacy results.
+                let songs = LibraryBrowseParser.parseSongs(from: json)
+                if !songs.isEmpty {
+                    var seen = Set<String>()
+                    return songs.filter { seen.insert($0.videoId).inserted }
+                        .prefix(limit).map { song in
+                            YouTubeTrack(
+                                videoId: song.videoId,
+                                title: song.title,
+                                artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
+                                duration: Double(song.duration),
+                                thumbnailURL: song.thumbnailUrl
+                            )
+                        }
+                }
+
+                let videos = YouTubeFeedParser.searchResults(in: json).videos
+                if !videos.isEmpty {
+                    return videos.prefix(limit).map { video in
                         YouTubeTrack(
-                            videoId: song.videoId,
-                            title: song.title,
-                            artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
-                            duration: Double(song.duration),
-                            thumbnailURL: song.thumbnailUrl
+                            videoId: video.videoId,
+                            title: video.title,
+                            artist: video.channelTitle ?? "Unknown Artist",
+                            duration: video.durationSeconds.map { Double($0) } ?? 0,
+                            thumbnailURL: video.thumbnailURL
                         )
                     }
+                }
+            } catch {
+                lastError = error
+                continue
             }
-            return YouTubeFeedParser.searchResults(in: json).videos.prefix(limit).map { video in
-                YouTubeTrack(
-                    videoId: video.videoId,
-                    title: video.title,
-                    artist: video.channelTitle ?? "Unknown Artist",
-                    duration: video.durationSeconds.map { Double($0) } ?? 0,
-                    thumbnailURL: video.thumbnailURL
-                )
-            }
-        } catch {
-            searchError = error.localizedDescription
-            return []
         }
+
+        if let lastError {
+            searchError = "Search failed: \(lastError.localizedDescription)"
+        } else {
+            searchError = "No results found. \(YouTubeAccountSession.shared.isSignedIn ? "" : "Sign in to YouTube Music to search.")"
+        }
+        return []
     }
 
     // MARK: - Stream resolution
@@ -107,7 +137,7 @@ final class YouTubeKitService: ObservableObject {
             )
             return result.streamUrl
         } catch {
-            searchError = "Stream resolution failed: \(error.localizedDescription)"
+            searchError = "Stream resolution failed"
             return nil
         }
     }
@@ -116,45 +146,49 @@ final class YouTubeKitService: ObservableObject {
 
     func searchArtists(term: String, limit: Int = 20) async -> [YouTubeChannel] {
         searchError = nil
-        do {
-            let json = try await client.search(
-                query: term,
-                params: YouTubeSearchFilter.channel.rawValue,
-                client: config.defaultClient
-            )
-            return LibraryBrowseParser.parseArtists(from: json).prefix(limit).map { artist in
-                YouTubeChannel(
-                    channelId: artist.channelId ?? artist.browseId,
-                    title: artist.name,
-                    thumbnailURL: artist.thumbnailUrl
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        for client in clients {
+            do {
+                let json = try await self.client.search(
+                    query: term,
+                    params: YouTubeSearchFilter.channel.rawValue,
+                    client: client
                 )
-            }
-        } catch {
-            searchError = error.localizedDescription
-            return []
+                return LibraryBrowseParser.parseArtists(from: json).prefix(limit).map { artist in
+                    YouTubeChannel(
+                        channelId: artist.channelId ?? artist.browseId,
+                        title: artist.name,
+                        thumbnailURL: artist.thumbnailUrl
+                    )
+                }
+            } catch { continue }
         }
+        searchError = "Artist search failed"
+        return []
     }
 
     func searchPlaylists(term: String, limit: Int = 20) async -> [YouTubePlaylist] {
         searchError = nil
-        do {
-            let json = try await client.search(
-                query: term,
-                params: YouTubeSearchFilter.playlist.rawValue,
-                client: config.defaultClient
-            )
-            return LibraryBrowseParser.parsePlaylists(from: json).prefix(limit).map { playlist in
-                YouTubePlaylist(
-                    playlistId: playlist.browseId,
-                    title: playlist.title,
-                    thumbnailURL: playlist.thumbnailUrl,
-                    videoCountText: playlist.songCount.map { "\($0) songs" }
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        for client in clients {
+            do {
+                let json = try await self.client.search(
+                    query: term,
+                    params: YouTubeSearchFilter.playlist.rawValue,
+                    client: client
                 )
-            }
-        } catch {
-            searchError = error.localizedDescription
-            return []
+                return LibraryBrowseParser.parsePlaylists(from: json).prefix(limit).map { playlist in
+                    YouTubePlaylist(
+                        playlistId: playlist.browseId,
+                        title: playlist.title,
+                        thumbnailURL: playlist.thumbnailUrl,
+                        videoCountText: playlist.songCount.map { "\($0) songs" }
+                    )
+                }
+            } catch { continue }
         }
+        searchError = "Playlist search failed"
+        return []
     }
 
     // MARK: - Playlist browsing
@@ -166,6 +200,7 @@ final class YouTubeKitService: ObservableObject {
         var continuation: String?
         var seenContinuations = Set<String>()
         var pageCount = 0
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
 
         do {
             repeat {
@@ -173,7 +208,19 @@ final class YouTubeKitService: ObservableObject {
                 if let continuation {
                     json = try await client.browse(continuation: continuation)
                 } else {
-                    json = try await client.browse(browseId: browseID, client: config.defaultClient)
+                    var lastError: Error?
+                    var fetchedJson: [String: Any]?
+                    for client in clients {
+                        do {
+                            fetchedJson = try await self.client.browse(browseId: browseID, client: client)
+                            break
+                        } catch {
+                            lastError = error
+                            continue
+                        }
+                    }
+                    guard let fetchedJson else { throw lastError ?? InnerTubeError.invalidResponse }
+                    json = fetchedJson
                 }
                 if title == nil { title = playlistTitle(from: json) }
                 rows.append(contentsOf: LibraryBrowseParser.extractItems(from: json) ?? [])
@@ -221,13 +268,16 @@ final class YouTubeKitService: ObservableObject {
 
     func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
         searchError = nil
-        do {
-            let json = try await client.search(query: term, client: config.defaultClient)
-            return Array(LibraryBrowseParser.parseAlbums(from: json).prefix(limit))
-        } catch {
-            searchError = error.localizedDescription
-            return []
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        for client in clients {
+            do {
+                let json = try await self.client.search(query: term, client: client)
+                let albums = LibraryBrowseParser.parseAlbums(from: json).prefix(limit)
+                if !albums.isEmpty { return Array(albums) }
+            } catch { continue }
         }
+        searchError = "Album search failed"
+        return []
     }
 
     func fetchAlbumTracks(browseID: String, limit: Int = 100) async -> (title: String?, artist: String?, tracks: [YouTubeTrack]) {
