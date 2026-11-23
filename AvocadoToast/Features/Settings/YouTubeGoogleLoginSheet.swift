@@ -18,6 +18,7 @@ struct YouTubeGoogleLoginSheet: View {
                     .font(.subheadline).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).padding(.horizontal)
                 GoogleLoginWebView(webView: $webView)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: .bottom)
                 if let message { Text(message).font(.footnote).foregroundStyle(.secondary) }
                 Button {
