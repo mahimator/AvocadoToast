@@ -67,5 +67,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AppCoordinator())
-        .modelContainer(for: [TrackModel.self, AlbumModel.self, ArtistModel.self, PlaylistModel.self])
+        .modelContainer(for: [TrackModel.self, AlbumModel.self, ArtistModel.self, PlaylistModel.self, RecentTrackModel.self])
 }
