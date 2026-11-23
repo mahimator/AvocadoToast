@@ -44,7 +44,7 @@ struct SearchView: View {
                             recentSearchesView
                         }
                     } else if !hasResults {
-                        ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try another artist, track or album."))
+                        ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try a different name or category."))
                     } else {
                         searchResultsView
                     }
@@ -202,7 +202,7 @@ struct SearchView: View {
 
     private var artistsResults: some View {
         List {
-            ForEach(CatalogService.shared.artistSearchResults, id: \.channelId) { artist in
+            ForEach(CatalogService.shared.artistSearchResults, id: \.title) { artist in
                 NavigationLink {
                     ArtistDetailView(query: artist.channelId ?? artist.title)
                 } label: {
