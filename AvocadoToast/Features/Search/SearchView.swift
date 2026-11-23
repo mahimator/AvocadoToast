@@ -153,8 +153,11 @@ struct SearchView: View {
             .padding(.horizontal, 18)
             ForEach(recentSearches, id: \.self) { term in
                 Button {
-                    query = term
-                    viewModel.searchNow(term, type: selectedCategory)
+                    if query == term {
+                        viewModel.searchNow(term, type: selectedCategory)
+                    } else {
+                        query = term
+                    }
                 } label: {
                     Label(term, systemImage: "clock.arrow.circlepath")
                         .foregroundStyle(ColorTokens.textPrimary)
@@ -385,6 +388,7 @@ final class SearchViewModel: ObservableObject {
     }
 
     func searchNow(_ text: String, type: SearchType = .songs) {
+        debounceTask?.cancel()
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else {
             searchService.cancelSearch()
