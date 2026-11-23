@@ -128,7 +128,7 @@ final class CatalogService: ObservableObject {
         isLoadingHome = true
         defer { isLoadingHome = false }
 
-        let trending = ["music 2024", "top songs", "popular music", "new releases"]
+        let trending = ["new music", "popular songs", "new releases"]
         var allTracks: [YouTubeTrack] = []
 
         for term in trending.prefix(3) {
