@@ -171,7 +171,6 @@ final class CatalogService: ObservableObject {
             // Imported files carry their sandbox URL in localFileURL.
         } else if let localPath = localAudioManager.localFilePath(for: track.videoId) {
             prepared.localFileURL = localPath
-            prepared.isDownloaded = true
         } else if prepared.streamURL == nil {
             prepared.streamURL = await resolveStream(for: prepared)
         }
