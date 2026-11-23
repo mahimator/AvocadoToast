@@ -85,10 +85,13 @@ struct NowPlayingView: View {
 
     private func updateAmbientColor(for source: String?) async {
         guard config.artworkBackgroundEnabled, let source, let url = URL(string: source) else {
-            withAnimation(.easeInOut(duration: 0.6)) { ambientColor = ColorTokens.accentPrimary.opacity(0.22) }
+            setAmbientColor(ColorTokens.accentPrimary.opacity(0.22))
             return
         }
-        guard let sampled = await ArtworkService.shared.ambientColor(from: url) else { return }
+        guard let sampled = await ArtworkService.shared.ambientColor(from: url) else {
+            setAmbientColor(ColorTokens.accentPrimary.opacity(0.22))
+            return
+        }
         setAmbientColor(sampled)
     }
 
