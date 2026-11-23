@@ -149,6 +149,16 @@ final class AlbumDetailViewModel: ObservableObject {
     func load(query: String) async {
         isLoading = true
         defer { isLoading = false }
+        if query.hasPrefix("MPREb_") || query.hasPrefix("OLAK") {
+            let result = await YouTubeKitService.shared.fetchAlbumTracks(browseID: query, limit: 100)
+            if !result.tracks.isEmpty {
+                self.tracks = result.tracks
+                self.albumTitle = result.title ?? query
+                self.artistName = result.artist ?? result.tracks.first?.artist
+                self.isSaved = result.tracks.allSatisfy { catalogService.isSaved($0) }
+                return
+            }
+        }
         let results = await catalogService.searchYouTube(query: query, limit: 20)
         self.tracks = results
         self.albumTitle = query
