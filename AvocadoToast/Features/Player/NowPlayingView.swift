@@ -66,7 +66,7 @@ struct NowPlayingView: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
-        .task(id: player.currentTrack?.thumbnailURL) {
+        .task(id: player.currentTrack?.videoId) {
             await updateAmbientColor(for: player.currentTrack?.thumbnailURL)
         }
         .sheet(isPresented: $showingQueue) {
@@ -89,8 +89,12 @@ struct NowPlayingView: View {
             return
         }
         guard let sampled = await ArtworkService.shared.ambientColor(from: url) else { return }
+        setAmbientColor(sampled)
+    }
+
+    private func setAmbientColor(_ color: Color) {
         withAnimation(config.reduceMotion ? nil : .easeInOut(duration: 0.85)) {
-            ambientColor = sampled
+            ambientColor = color
         }
     }
 
