@@ -163,7 +163,6 @@ struct CachedAsyncImage<Content: View>: View {
     @ViewBuilder let content: (UIImage?) -> Content
 
     @State private var image: UIImage?
-    @State private var isLoaded = false
 
     var body: some View {
         Group {
@@ -175,15 +174,12 @@ struct CachedAsyncImage<Content: View>: View {
         }
         .task(id: url) {
             image = nil
-            isLoaded = false
             guard let url else {
-                isLoaded = true
                 return
             }
             let loadedImage = await ArtworkService.shared.loadArtwork(from: url, size: size)
             guard !Task.isCancelled else { return }
             image = loadedImage
-            isLoaded = true
         }
     }
 }
