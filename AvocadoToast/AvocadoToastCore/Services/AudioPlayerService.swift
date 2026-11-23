@@ -160,6 +160,10 @@ final class AudioPlayerService: ObservableObject {
                 case .readyToPlay:
                     let itemDuration = item.duration.seconds
                     if itemDuration.isFinite && itemDuration > 0 { self.duration = itemDuration }
+                    // Start only after AVPlayer confirms that the item is playable.
+                    self.remotePlayer.play()
+                    self.isPlaying = self.remotePlayer.timeControlStatus == .playing || self.remotePlayer.timeControlStatus == .waitingToPlay
+                    self.errorMessage = nil
                     self.updateNowPlayingInfo()
                 case .failed:
                     self.errorMessage = item.error?.localizedDescription ?? "This audio source couldn't be played."
@@ -172,8 +176,8 @@ final class AudioPlayerService: ObservableObject {
         }
         remotePlayer.allowsExternalPlayback = true
         remotePlayer.replaceCurrentItem(with: item)
-        remotePlayer.play()
-        isPlaying = true
+        // Wait for readyToPlay before reporting that playback has begun.
+        isPlaying = false
         updateNowPlayingInfo()
     }
 
