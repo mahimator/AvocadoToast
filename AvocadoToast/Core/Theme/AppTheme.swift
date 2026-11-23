@@ -32,23 +32,23 @@ final class AppTheme: ObservableObject {
 
     var resolvedBackgroundPrimary: Color {
         switch colorScheme {
-        case .light: warmPaper
-        case .dark: espresso
-        case .system: Color(.systemBackground)
+        case .light: return warmPaper
+        case .dark: return espresso
+        case .system: return Color(.systemBackground)
         }
     }
     var resolvedTextPrimary: Color {
         switch colorScheme {
-        case .light: warmInk
-        case .dark: ivory
-        case .system: Color(.label)
+        case .light: return warmInk
+        case .dark: return ivory
+        case .system: return Color(.label)
         }
     }
     var resolvedTextSecondary: Color {
         switch colorScheme {
-        case .light: warmInk.opacity(0.62)
-        case .dark: ivory.opacity(0.62)
-        case .system: Color(.secondaryLabel)
+        case .light: return warmInk.opacity(0.62)
+        case .dark: return ivory.opacity(0.62)
+        case .system: return Color(.secondaryLabel)
         }
     }
     var resolvedSurfaceGlass: Color { ivory.opacity(colorScheme == .light ? 0.22 : 0.08) }
