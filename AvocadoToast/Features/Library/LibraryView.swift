@@ -99,6 +99,7 @@ struct LibraryView: View {
     private func importAudioFiles(_ urls: [URL]) {
         var failedImports: [String] = []
         var importedCount = 0
+        var importedModels: [TrackModel] = []
         for source in urls {
             do {
                 let imported = try LocalAudioManager.shared.importAudio(from: source)
@@ -115,12 +116,13 @@ struct LibraryView: View {
                     addedAt: Date(),
                     playCount: 0
                 )
-                library.saveTrack(model)
+                importedModels.append(model)
                 importedCount += 1
             } catch {
                 failedImports.append("\(source.lastPathComponent): \(error.localizedDescription)")
             }
         }
+        library.saveTracks(importedModels)
         if failedImports.isEmpty {
             importError = "Imported \(importedCount) audio file\(importedCount == 1 ? "" : "s") into your library."
         } else {
