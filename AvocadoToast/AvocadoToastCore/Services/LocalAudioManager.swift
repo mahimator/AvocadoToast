@@ -73,12 +73,6 @@ final class LocalAudioManager: ObservableObject {
         return fileManager.fileExists(atPath: url.path) ? url.path : nil
     }
 
-    func deleteLocalFile(videoId: String) {
-        // Retained for old cache entries only.
-        let url = audioDir.appendingPathComponent("\(videoId).m4a")
-        try? fileManager.removeItem(at: url)
-    }
-
     func deleteImportedAudio(at path: String) {
         let root = audioDir.standardizedFileURL.path + "/"
         let candidate = URL(fileURLWithPath: path).standardizedFileURL
