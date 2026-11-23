@@ -14,7 +14,10 @@ import Combine
 final class SearchService: ObservableObject {
     static let shared = SearchService()
 
-    @Published var recentSearches: [String] = []
+    @Published var recentSearches: [String] = [] {
+        didSet { UserDefaults.standard.set(recentSearches, forKey: Self.recentSearchesKey) }
+    }
+    private static let recentSearchesKey = "avocadoToast.recentSearches.v1"
     @Published var isSearching: Bool = false
 
     private let catalogService: CatalogService
@@ -22,6 +25,7 @@ final class SearchService: ObservableObject {
 
     init(catalogService: CatalogService = .shared) {
         self.catalogService = catalogService
+        self.recentSearches = UserDefaults.standard.stringArray(forKey: Self.recentSearchesKey) ?? []
     }
 
     /// Debounced search. Only the latest query within `delay` seconds is sent.
