@@ -10,6 +10,7 @@ struct ContentView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var catalogPlayer = AudioPlayerService.shared
+    @ObservedObject private var config = AppConfig.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -34,11 +35,11 @@ struct ContentView: View {
                 MiniPlayerView()
                     .padding(.horizontal, 12)
                     .padding(.bottom, 72)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(config.reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: catalogPlayer.currentTrack != nil)
+        .animation(config.reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: catalogPlayer.currentTrack != nil)
         .sheet(isPresented: $coordinator.showingNowPlaying) {
             NowPlayingView()
                 .presentationDetents([.large])
