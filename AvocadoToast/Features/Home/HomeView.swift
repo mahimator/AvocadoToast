@@ -2,106 +2,225 @@
 //  HomeView.swift
 //  AvocadoToast
 //
-//  Created by Madhav Trivedi on 20/11/26.
-//
 
 import SwiftUI
-import Combine
 
 @MainActor
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @EnvironmentObject private var theme: AppTheme
-    
+    @EnvironmentObject private var coordinator: AppCoordinator
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Top area
-                    topArea
-                    
-                    // Search entry
-                    searchEntry
-                    
-                    // Featured tracks
-                    if viewModel.tracks.isEmpty {
-                        emptyState
+                VStack(alignment: .leading, spacing: 28) {
+                    masthead
+                    searchLauncher
+                    if !viewModel.tracks.isEmpty {
+                        featuredSection
+                        freshSection
+                    } else if viewModel.isLoading {
+                        loadingSection
                     } else {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Featured")
-                                .font(.headline.weight(.semibold))
-                                .padding(.horizontal)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 14) {
-                                    ForEach(viewModel.tracks) { track in
-                                        HomeTrackCard(track: track)
-                                    }
-                                }
-                                .padding(.horizontal)
+                        emptySection
+                    }
+                    moodSection
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 120)
+            }
+            .background(ColorTokens.backgroundPrimary.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await viewModel.refresh() }
+            .task { await viewModel.loadIfNeeded() }
+        }
+    }
+
+    private var masthead: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("AVOCADOTOAST")
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .tracking(2.6)
+                    .foregroundStyle(ColorTokens.accentPrimary)
+                Text(viewModel.greeting ?? "Good music, good mood.")
+                    .font(.system(size: 29, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button { coordinator.selection = .settings } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.12)))
+            }
+            .accessibilityLabel("Settings")
+        }
+    }
+
+    private var searchLauncher: some View {
+        Button {
+            coordinator.searchQuery = ""
+            coordinator.selection = .search
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass").font(.title3)
+                Text("What are you in the mood for?")
+                    .font(.subheadline)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 16)
+            .frame(height: 58)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.14)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var featuredSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeading("On repeat", subtitle: "A little something to start")
+            if let featured = viewModel.tracks.first {
+                Button {
+                    Task { await CatalogService.shared.playTrack(featured) }
+                } label: {
+                    ZStack(alignment: .bottomLeading) {
+                        CachedAsyncImage(url: featured.thumbnailURL.flatMap(URL.init(string:)), size: CGSize(width: 360, height: 230)) { image in
+                            if let image {
+                                Image(uiImage: image).resizable().scaledToFill()
+                            } else {
+                                ColorTokens.accentPrimary.opacity(0.2)
                             }
                         }
+                        .frame(height: 228)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .overlay {
+                            LinearGradient(colors: [.clear, .black.opacity(0.78)], startPoint: .center, endPoint: .bottom)
+                        }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("FEATURED TRACK")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(1.8)
+                                .foregroundStyle(.white.opacity(0.75))
+                            Text(featured.title)
+                                .font(.title2.bold())
+                                .lineLimit(2)
+                            Text(featured.artist)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(18)
+                        HStack {
+                            Spacer()
+                            Image(systemName: "play.fill")
+                                .font(.title2)
+                                .foregroundStyle(.black)
+                                .frame(width: 54, height: 54)
+                                .background(ColorTokens.accentPrimary, in: Circle())
+                                .padding(18)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .bottom)
                     }
-                    
-                    Spacer(minLength: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.12)))
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
+                .buttonStyle(.plain)
             }
-            .refreshable { await viewModel.refresh() }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.visible, for: .navigationBar)
-            .background(theme.resolvedBackgroundPrimary.ignoresSafeArea())
-            .onAppear { viewModel.onAppear() }
-            .onDisappear { viewModel.onDisappear() }
         }
     }
-    
-    private var topArea: some View {
+
+    private var freshSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeading("Your next obsession", subtitle: "Explore the sound")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(viewModel.tracks.dropFirst()) { track in
+                        Button {
+                            Task { await CatalogService.shared.playTrack(track) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 9) {
+                                CachedAsyncImage(url: track.thumbnailURL.flatMap(URL.init(string:)), size: CGSize(width: 154, height: 154)) { image in
+                                    if let image {
+                                        Image(uiImage: image).resizable().scaledToFill()
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 18).fill(ColorTokens.artworkPlaceholder)
+                                    }
+                                }
+                                .frame(width: 154, height: 154)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                Text(track.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(2)
+                                    .foregroundStyle(.primary)
+                                Text(track.artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 154, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var moodSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeading("Pick a feeling", subtitle: "Search your own soundtrack")
+            HStack(spacing: 10) {
+                moodChip("Focus", icon: "brain.head.profile")
+                moodChip("Late night", icon: "moon.stars")
+                moodChip("Energy", icon: "bolt.fill")
+            }
+        }
+    }
+
+    private func moodChip(_ title: String, icon: String) -> some View {
+        Button {
+            coordinator.searchQuery = title
+            coordinator.selection = .search
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(.thinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sectionHeading(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.title3.weight(.bold))
+            Text(subtitle).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var loadingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image("app-icon")
-                    .renderingMode(.template)
-                    .foregroundColor(theme.resolvedAccentPrimary)
-                    .frame(width: 32, height: 32)
-                Text("Avocado Toast")
-                    .font(TextStyle.displayMedium.font)
-                    .foregroundColor(theme.resolvedTextPrimary)
-            }
-            
-            if let greeting = viewModel.greeting {
-                Text(greeting)
-                    .font(.subheadline)
-                    .foregroundColor(theme.resolvedTextSecondary)
-            }
-            
-            Spacer()
-            
-            Button("Settings") { /* Navigate to settings */ }
-                .foregroundColor(theme.resolvedTextSecondary)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(theme.resolvedSurfaceElevated)
-                .cornerRadius(20)
+            sectionHeading("Finding your soundtrack", subtitle: "Loading music from the catalog")
+            ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+            RoundedRectangle(cornerRadius: 20).fill(.quaternary).frame(height: 180)
         }
     }
-    
-    private var searchEntry: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .font(.title3)
-                    .foregroundColor(theme.resolvedTextSecondary)
-                TextField("Search...", text: .constant(""))
-                    .font(.body).foregroundColor(theme.resolvedTextPrimary)
-            }
-            .hPadding(16).vPadding(14)
-            .background(theme.resolvedSurfaceElevated)
-            .cornerRadius(20).overlay(RoundedRectangle(cornerRadius: 20).stroke(theme.resolvedSeparator, lineWidth: 1))
-        }
-    }
-    
-    private var emptyState: some View {
-        ContentUnavailableView("Avocado Toast", systemImage: "music.note", description: Text("Search for music to get started"))
+
+    private var emptySection: some View {
+        ContentUnavailableView("Nothing queued up", systemImage: "music.note", description: Text("Refresh or search to find your first track."))
+            .frame(maxWidth: .infinity)
     }
 }
 
@@ -111,53 +230,3 @@ struct HomeView: View {
         .environmentObject(AppTheme.shared)
 }
 
-// MARK: - Home track card
-
-struct HomeTrackCard: View {
-    let track: YouTubeTrack
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let thumbnailURL = track.thumbnailURL, let url = URL(string: thumbnailURL) {
-                CachedAsyncImage(url: url, size: CGSize(width: 150, height: 150)) { image in
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 150, height: 150)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    } else {
-                        placeholderArtwork
-                    }
-                }
-            } else {
-                placeholderArtwork
-            }
-
-            Text(track.title)
-                .font(.body.weight(.medium))
-                .lineLimit(2)
-            Text(track.artist)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(width: 150)
-    }
-
-    private var placeholderArtwork: some View {
-        RoundedRectangle(cornerRadius: 14)
-            .fill(Color.secondary.opacity(0.15))
-            .frame(width: 150, height: 150)
-    }
-}
-
-// MARK: - View extensions
-
-extension View {
-    func hPadding(_ length: CGFloat) -> some View { modifier(HPadding(length: length)) }
-    func vPadding(_ length: CGFloat) -> some View { modifier(VPadding(length: length)) }
-}
-
-struct HPadding: ViewModifier { let length: CGFloat; func body(content: Content) -> some View { content.padding(.horizontal, length) } }
-struct VPadding: ViewModifier { let length: CGFloat; func body(content: Content) -> some View { content.padding(.vertical, length) } }
