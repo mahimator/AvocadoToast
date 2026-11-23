@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import AVFoundation
+import MediaPlayer
 
 @MainActor
 final class AudioPlayerService: ObservableObject {
@@ -25,6 +26,8 @@ final class AudioPlayerService: ObservableObject {
     @Published var duration: Double = 0
     @Published var errorMessage: String?
     var onPlaybackFinished: (() -> Void)?
+    var onPlaybackNext: (() -> Void)?
+    var onPlaybackPrevious: (() -> Void)?
 
     private var audioFile: AVAudioFile?
     private var remoteTimeObserver: Any?
@@ -40,6 +43,7 @@ final class AudioPlayerService: ObservableObject {
         setupEngine()
         setupEQ()
         setupRemoteObservers()
+        configureRemoteCommands()
         configureAudioSession()
     }
 
@@ -86,6 +90,7 @@ final class AudioPlayerService: ObservableObject {
                    itemDuration.isFinite, itemDuration > 0 {
                     self.duration = itemDuration
                 }
+                self.updateNowPlayingInfo()
             }
         }
 
@@ -151,9 +156,11 @@ final class AudioPlayerService: ObservableObject {
         audioFile = nil
         playerNode.stop()
         let item = AVPlayerItem(url: url)
+        remotePlayer.allowsExternalPlayback = true
         remotePlayer.replaceCurrentItem(with: item)
         remotePlayer.play()
         isPlaying = true
+        updateNowPlayingInfo()
     }
 
     private func playLocalEngine() {
@@ -200,6 +207,7 @@ final class AudioPlayerService: ObservableObject {
         if isRemotePlayback, remotePlayer.currentItem != nil {
             remotePlayer.play()
             isPlaying = true
+            updateNowPlayingInfo()
         } else if bufferIsLoaded {
             playerNode.play()
             isPlaying = true
@@ -224,6 +232,7 @@ final class AudioPlayerService: ObservableObject {
         bufferIsLoaded = false
         isRemotePlayback = false
         audioFile = nil
+        updateNowPlayingInfo()
     }
 
     func togglePlayPause() {
@@ -272,6 +281,79 @@ final class AudioPlayerService: ObservableObject {
               let nodeTime = playerNode.playerTime(forNodeTime: renderTime),
               nodeTime.sampleRate > 0 else { return }
         currentTime = min(duration, max(0, Double(nodeTime.sampleTime) / nodeTime.sampleRate))
+        updateNowPlayingInfo()
+    }
+
+    // MARK: - Lock Screen / headset / car controls
+
+    private func configureRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.isEnabled = true
+        center.pauseCommand.isEnabled = true
+        center.togglePlayPauseCommand.isEnabled = true
+        center.nextTrackCommand.isEnabled = true
+        center.previousTrackCommand.isEnabled = true
+        center.changePlaybackPositionCommand.isEnabled = true
+
+        center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.resume() }
+            return .success
+        }
+        center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.pause() }
+            return .success
+        }
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.togglePlayPause() }
+            return .success
+        }
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.onPlaybackNext?() }
+            return .success
+        }
+        center.previousTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.onPlaybackPrevious?() }
+            return .success
+        }
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            Task { @MainActor in self?.seek(to: event.positionTime) }
+            return .success
+        }
+    }
+
+    private func updateNowPlayingMetadata(for track: YouTubeTrack) {
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: track.title,
+            MPMediaItemPropertyArtist: track.artist,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime
+        ]
+        if track.duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = track.duration }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        guard let artworkURL = track.thumbnailURL.flatMap(URL.init(string:)) else { return }
+        Task { [weak self] in
+            guard let self,
+                  let artwork = await ArtworkService.shared.loadArtwork(from: artworkURL, size: CGSize(width: 512, height: 512)),
+                  self.currentTrack?.videoId == track.videoId else { return }
+            let lockScreenArtwork = MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork }
+            var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            updated[MPMediaItemPropertyArtwork] = lockScreenArtwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
+        }
+    }
+
+    private func updateNowPlayingInfo() {
+        guard currentTrack != nil else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            return
+        }
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     func setEQGain(band: Int, gain: Float) {
