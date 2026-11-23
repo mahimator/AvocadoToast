@@ -173,9 +173,16 @@ struct CachedAsyncImage<Content: View>: View {
                 content(nil)
             }
         }
-        .task {
-            guard let url, !isLoaded else { return }
-            image = await ArtworkService.shared.loadArtwork(from: url, size: size)
+        .task(id: url) {
+            image = nil
+            isLoaded = false
+            guard let url else {
+                isLoaded = true
+                return
+            }
+            let loadedImage = await ArtworkService.shared.loadArtwork(from: url, size: size)
+            guard !Task.isCancelled else { return }
+            image = loadedImage
             isLoaded = true
         }
     }
