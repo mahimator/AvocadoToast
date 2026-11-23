@@ -11,6 +11,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingResetConfirmation = false
     @State private var resetMessage: String?
+    @State private var cacheMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,7 @@ struct SettingsView: View {
                 Section("Storage") {
                     Button("Clear artwork cache", systemImage: "photo") {
                         ArtworkService.shared.clearCache()
+                        cacheMessage = "Artwork cache cleared. Images will be fetched again as needed."
                     }
                     Button(role: .destructive) {
                         showingResetConfirmation = true
@@ -51,6 +53,11 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This removes saved tracks, albums, artists, playlists, listening history, and imported audio files. This cannot be undone.")
+            }
+            .alert("Artwork cache", isPresented: Binding(get: { cacheMessage != nil }, set: { if !$0 { cacheMessage = nil } })) {
+                Button("OK", role: .cancel) { cacheMessage = nil }
+            } message: {
+                Text(cacheMessage ?? "")
             }
             .alert("Library", isPresented: Binding(get: { resetMessage != nil }, set: { if !$0 { resetMessage = nil } })) {
                 Button("OK", role: .cancel) { resetMessage = nil }
