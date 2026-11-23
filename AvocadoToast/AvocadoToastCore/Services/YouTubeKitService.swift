@@ -136,7 +136,7 @@ final class YouTubeKitService: ObservableObject {
                     playlistId: playlist.browseId,
                     title: playlist.title,
                     thumbnailURL: playlist.thumbnailUrl,
-                    videoCountText: playlist.songCount.map { "\\($0) songs" }
+                    videoCountText: playlist.songCount.map { "\($0) songs" }
                 )
             }
         } catch {
