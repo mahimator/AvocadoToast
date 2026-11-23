@@ -165,12 +165,11 @@ struct YouTubeTrack: Identifiable, Equatable, Hashable {
     let duration: Double
     let thumbnailURL: String?
     var streamURL: String?
-    var isDownloaded: Bool = false
     var localFileURL: String?
 
     init(videoId: String, title: String, artist: String, duration: Double = 0,
          thumbnailURL: String? = nil, streamURL: String? = nil,
-         isDownloaded: Bool = false, localFileURL: String? = nil, provider: String = "youtube") {
+         localFileURL: String? = nil, provider: String = "youtube") {
         self.id = videoId
         self.videoId = videoId
         self.provider = provider
@@ -179,7 +178,6 @@ struct YouTubeTrack: Identifiable, Equatable, Hashable {
         self.duration = duration
         self.thumbnailURL = thumbnailURL
         self.streamURL = streamURL
-        self.isDownloaded = isDownloaded
         self.localFileURL = localFileURL
     }
 
