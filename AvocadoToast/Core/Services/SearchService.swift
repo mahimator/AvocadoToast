@@ -35,7 +35,10 @@ final class SearchService: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
+            guard !trimmed.isEmpty else {
+                catalogService.cancelSearch()
+                return
+            }
             addRecent(trimmed)
             catalogService.search(query: trimmed, type: type)
         }
