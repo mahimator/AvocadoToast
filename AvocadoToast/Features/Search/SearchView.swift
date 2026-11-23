@@ -302,7 +302,7 @@ struct SearchView: View {
             provider: "youtube",
             providerID: playlist.playlistId,
             isEditable: false,
-            metadata: ["trackCount": playlist.videoCountText ?? ""]
+            metadata: ["trackCount": playlist.videoCountText ?? "Playlist"]
         )
         LibraryService.shared.savePlaylist(model)
     }
