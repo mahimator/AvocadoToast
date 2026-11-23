@@ -352,7 +352,7 @@ final class CatalogService: ObservableObject {
             }
             if let next = shuffleDeck.first {
                 shuffleDeck.removeFirst()
-                shuffleHistory.append(queueIndex)
+                recordShuffleHistory(queueIndex)
                 queueIndex = next
                 Task { await playQueueItem(playbackQueue[queueIndex]) }
             }
