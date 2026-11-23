@@ -147,7 +147,7 @@ final class ArtistDetailViewModel: ObservableObject {
         defer { isLoading = false }
         let results = await catalogService.searchYouTube(query: query, limit: 20)
         self.tracks = results
-        self.artistName = results.first?.artist
+        self.artistName = query
         self.isSaved = !results.isEmpty && results.allSatisfy { catalogService.isSaved($0) }
     }
 
