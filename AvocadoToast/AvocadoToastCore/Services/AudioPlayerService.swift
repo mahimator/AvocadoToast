@@ -278,7 +278,17 @@ final class AudioPlayerService: ObservableObject {
             guard remaining > 0 else { return }
             playerNode.stop()
             let count = AVAudioFrameCount(remaining)
-            playerNode.scheduleSegment(audioFile, startingFrame: frame, frameCount: count, at: nil, completionHandler: nil)
+            let trackID = currentTrack?.videoId
+            playerNode.scheduleSegment(audioFile, startingFrame: frame, frameCount: count, at: nil) { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.currentTrack?.videoId == trackID, !self.isRemotePlayback else { return }
+                    self.isPlaying = false
+                    self.currentTime = self.duration
+                    self.stopProgressTimer()
+                    self.updateNowPlayingInfo()
+                    self.onPlaybackFinished?()
+                }
+            }
             currentTime = target
             if isPlaying { playerNode.play() }
             updateLocalPlaybackTime()
