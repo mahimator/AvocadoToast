@@ -1,0 +1,21 @@
+# Avocado Toast Backend
+# Python/FastAPI catalog service backed by ytmusicapi
+
+[project]
+name = "avocado-toast-backend"
+version = "1.0.0"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi>=0.100,<1.0",
+    "uvicorn>=0.23",
+    "pydantic>=2.0",
+    "httpx>=0.24",
+    "ytmusicapi>=1.6",
+    "python-multipart",
+]
+
+[tool.uvicorn]
+app = "app.main:app"
+host = "0.0.0.0"
+port = 8000
+reload = true
