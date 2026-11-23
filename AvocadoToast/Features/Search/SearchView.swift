@@ -186,7 +186,7 @@ struct SearchView: View {
                         } else { searchArtworkPlaceholder }
                         VStack(alignment: .leading, spacing: 4) {
                             Text(album.title).font(.body.weight(.semibold)).lineLimit(2)
-                            Text(album.artist ?? album.albumTypeDescription)
+                            Text(album.artist ?? (album.songCount > 0 ? "\(album.songCount) songs" : "Album"))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
