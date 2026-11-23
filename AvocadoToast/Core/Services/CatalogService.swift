@@ -257,6 +257,7 @@ final class CatalogService: ObservableObject {
         guard playbackQueue.indices.contains(queueIndex) else {
             playbackQueue.removeAll()
             queueIndex = 0
+            resetShuffleState()
             return
         }
         playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
@@ -353,7 +354,7 @@ final class CatalogService: ObservableObject {
         audioPlayer.stop()
         playbackQueue.removeAll()
         queueIndex = 0
-        shuffleHistory.removeAll()
+        resetShuffleState()
     }
 
     func seek(to time: Double) {
