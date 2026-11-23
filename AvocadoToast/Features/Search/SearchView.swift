@@ -12,6 +12,7 @@ struct SearchView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel = SearchViewModel()
     @State private var query = ""
+    @State private var selectedCategory: SearchType = .songs
 
     var body: some View {
         NavigationStack {
@@ -20,12 +21,16 @@ struct SearchView: View {
                     .padding(.horizontal, 18)
                     .padding(.top, 12)
 
-                Text("Songs, artists, albums and playlists")
+                Text("Search the music catalog")
                     .font(.caption)
                     .foregroundStyle(ColorTokens.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 22)
                     .padding(.top, 10)
+
+                categoryPicker
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
 
                 Group {
                     if CatalogService.shared.isSearching {
@@ -38,10 +43,10 @@ struct SearchView: View {
                         } else {
                             recentSearchesView
                         }
-                    } else if CatalogService.shared.searchResults.isEmpty {
+                    } else if !hasResults {
                         ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try another artist, track or album."))
                     } else {
-                        resultsList
+                        searchResultsView
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,8 +61,37 @@ struct SearchView: View {
             }
             .onChange(of: query) { _, value in
                 coordinator.searchQuery = value
-                viewModel.debounceSearch(value)
+                viewModel.debounceSearch(value, type: selectedCategory)
             }
+            .onChange(of: selectedCategory) { _, category in
+                if !query.isEmpty { viewModel.searchNow(query, type: category) }
+            }
+        }
+    }
+
+    private var categoryPicker: some View {
+        Picker("Search category", selection: $selectedCategory) {
+            ForEach(SearchType.allCases) { category in
+                Text(category.title).tag(category)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var hasResults: Bool {
+        switch selectedCategory {
+        case .songs: !CatalogService.shared.searchResults.isEmpty
+        case .artists: !CatalogService.shared.artistSearchResults.isEmpty
+        case .playlists: !CatalogService.shared.playlistSearchResults.isEmpty
+        }
+    }
+
+    @ViewBuilder
+    private var searchResultsView: some View {
+        switch selectedCategory {
+        case .songs: songsResults
+        case .artists: artistsResults
+        case .playlists: playlistsResults
         }
     }
 
@@ -132,7 +166,78 @@ struct SearchView: View {
         .padding(.top, 20)
     }
 
-    private var resultsList: some View {
+    private var artistsResults: some View {
+        List {
+            ForEach(CatalogService.shared.artistSearchResults, id: \.channelId) { artist in
+                NavigationLink {
+                    ArtistDetailView(query: artist.channelId ?? artist.title)
+                } label: {
+                    HStack(spacing: 12) {
+                        if let url = artist.thumbnailURL.flatMap(URL.init(string:)) {
+                            CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
+                                if let image {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                } else { searchArtworkPlaceholder }
+                            }
+                        } else { searchArtworkPlaceholder }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(artist.title).font(.body.weight(.semibold)).lineLimit(1)
+                            Text(artist.handle ?? artist.subscriberCountText ?? "Artist")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ColorTokens.backgroundPrimary)
+    }
+
+    private var playlistsResults: some View {
+        List {
+            ForEach(CatalogService.shared.playlistSearchResults, id: \.playlistId) { playlist in
+                NavigationLink {
+                    PlaylistDetailView(playlistID: playlist.playlistId)
+                } label: {
+                    HStack(spacing: 12) {
+                        if let url = playlist.thumbnailURL.flatMap(URL.init(string:)) {
+                            CachedAsyncImage(url: url, size: CGSize(width: 56, height: 56)) { image in
+                                if let image {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                } else { searchArtworkPlaceholder }
+                            }
+                        } else { searchArtworkPlaceholder }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(playlist.title).font(.body.weight(.semibold)).lineLimit(2)
+                            Text(playlist.channelTitle ?? playlist.videoCountText ?? "Playlist")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ColorTokens.backgroundPrimary)
+    }
+
+    private var searchArtworkPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .fill(ColorTokens.artworkPlaceholder)
+            .frame(width: 56, height: 56)
+            .overlay(Image(systemName: "music.note").foregroundStyle(ColorTokens.textSecondary))
+    }
+
+    private var songsResults: some View {
         List {
             ForEach(CatalogService.shared.searchResults) { track in
                 Button {
@@ -240,11 +345,11 @@ final class SearchViewModel: ObservableObject {
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled else { return }
-            searchNow(text)
+            searchNow(text, type: type)
         }
     }
 
-    func searchNow(_ text: String) {
+    func searchNow(_ text: String, type: SearchType = .songs) {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else {
             searchService.cancelSearch()
@@ -252,7 +357,7 @@ final class SearchViewModel: ObservableObject {
         }
         searchService.addRecent(cleaned)
         recentSearches = searchService.recentSearches
-        CatalogService.shared.search(query: cleaned)
+        CatalogService.shared.search(query: cleaned, type: type)
     }
 
     func select(_ track: YouTubeTrack) {
