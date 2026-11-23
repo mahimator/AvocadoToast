@@ -37,7 +37,7 @@ final class LocalAudioManager: ObservableObject {
         let hasAccess = sourceURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
 
-        let allowedExtensions = ["mp3", "m4a", "aac", "wav", "aiff", "caf", "flac"]
+        let allowedExtensions = ["mp3", "m4a", "aac", "wav", "aiff", "caf"]
         let fileExtension = sourceURL.pathExtension.lowercased()
         guard allowedExtensions.contains(fileExtension) else {
             throw LocalAudioImportError.unsupportedFormat
@@ -70,11 +70,16 @@ final class LocalAudioManager: ObservableObject {
                 keySpace: .common
             ).first?.dataValue
             let artworkPath: String?
-            if let artworkData, UIImage(data: artworkData) != nil {
+            if let artworkData, let image = UIImage(data: artworkData),
+               let jpegData = image.jpegData(compressionQuality: 0.9) {
                 let artworkFile = audioDir.appendingPathComponent("\(id).artwork")
                     .appendingPathExtension("jpg")
-                try? artworkData.write(to: artworkFile, options: Data.WritingOptions.atomic)
-                artworkPath = artworkFile.absoluteString
+                do {
+                    try jpegData.write(to: artworkFile, options: .atomic)
+                    artworkPath = artworkFile.absoluteString
+                } catch {
+                    artworkPath = nil
+                }
             } else {
                 artworkPath = nil
             }
@@ -111,7 +116,7 @@ enum LocalAudioImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat:
-            return "This audio format isn't supported. Try MP3, M4A, AAC, WAV, AIFF, CAF or FLAC."
+            return "This audio format isn't supported. Try MP3, M4A, AAC, WAV, AIFF or CAF."
         }
     }
 }
