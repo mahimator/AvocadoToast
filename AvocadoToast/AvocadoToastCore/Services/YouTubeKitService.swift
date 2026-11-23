@@ -165,6 +165,71 @@ final class YouTubeKitService: ObservableObject {
         return nil
     }
 
+    // MARK: - Albums and artist pages
+
+    func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
+        do {
+            let json = try await client.search(query: term, client: config.defaultClient)
+            return Array(LibraryBrowseParser.parseAlbums(from: json).prefix(limit))
+        } catch {
+            searchError = error.localizedDescription
+            return []
+        }
+    }
+
+    func fetchAlbumTracks(browseID: String, limit: Int = 100) async -> (title: String?, artist: String?, tracks: [YouTubeTrack]) {
+        do {
+            let json = try await client.browse(browseId: browseID, client: config.defaultClient)
+            let songs = LibraryBrowseParser.parseSongs(from: json)
+            let tracks = songs.prefix(limit).map { song in
+                YouTubeTrack(
+                    videoId: song.videoId,
+                    title: song.title,
+                    artist: song.artists.joined(separator: ", "),
+                    duration: Double(song.duration),
+                    thumbnailURL: song.thumbnailUrl
+                )
+            }
+            let header = json["header"] as? [String: Any]
+            var title: String?
+            var artist: String?
+            for key in ["musicAlbumHeaderRenderer", "musicDetailHeaderRenderer", "musicImmersiveHeaderRenderer"] {
+                guard let renderer = header?[key] as? [String: Any] else { continue }
+                if title == nil {
+                    title = (renderer["title"] as? String) ?? InnerTubeJSON.runsText(renderer["title"] as? [String: Any])
+                }
+                if artist == nil {
+                    artist = InnerTubeJSON.runsText(renderer["subtitle"] as? [String: Any])
+                }
+            }
+            return (title, artist, tracks)
+        } catch {
+            searchError = error.localizedDescription
+            return (nil, nil, [])
+        }
+    }
+
+    func fetchArtistTopTracks(channelID: String, limit: Int = 25) async -> (name: String?, tracks: [YouTubeTrack]) {
+        do {
+            let json = try await client.browse(browseId: channelID, client: config.defaultClient)
+            let name = YouTubeFeedParser.channels(in: json).first?.title
+            let videos = YouTubeFeedParser.videos(in: json)
+            let tracks = videos.prefix(limit).map { video in
+                YouTubeTrack(
+                    videoId: video.videoId,
+                    title: video.title,
+                    artist: video.channelTitle ?? name ?? "Unknown Artist",
+                    duration: video.durationSeconds.map { Double($0) } ?? 0,
+                    thumbnailURL: video.thumbnailURL
+                )
+            }
+            return (name, tracks)
+        } catch {
+            searchError = error.localizedDescription
+            return (nil, [])
+        }
+    }
+
     // MARK: - Lyrics
 
     func fetchLyrics(videoId: String) async -> [YouTubeTranscriptSegment] {
