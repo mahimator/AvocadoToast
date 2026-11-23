@@ -43,6 +43,7 @@ final class CatalogService: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var activeSearchID: UUID?
     private var shuffleHistory: [Int] = []
+    private var shuffleDeck: [Int] = []
 
     func refreshSavedTracks() {
         let library = LibraryService.shared
@@ -177,6 +178,8 @@ final class CatalogService: ObservableObject {
         playbackQueue = [track]
         queueIndex = 0
         shuffleHistory.removeAll()
+        shuffleDeck.removeAll()
+        shuffleDeck.removeAll()
         await playQueueItem(track)
     }
 
@@ -205,7 +208,7 @@ final class CatalogService: ObservableObject {
             return
         }
         playbackQueue.append(track)
-        shuffleHistory.removeAll()
+        resetShuffleState()
     }
 
     func playNextInQueue(_ track: YouTubeTrack) {
@@ -215,16 +218,20 @@ final class CatalogService: ObservableObject {
         }
         let insertion = min(queueIndex + 1, playbackQueue.count)
         playbackQueue.insert(track, at: insertion)
-        shuffleHistory.removeAll()
+        resetShuffleState()
     }
 
     func playNext() {
         guard !playbackQueue.isEmpty else { return }
         let nextIndex: Int
         if shuffleEnabled && playbackQueue.count > 1 {
-            let candidates = playbackQueue.indices.filter { $0 != queueIndex }
-            nextIndex = candidates.randomElement() ?? queueIndex
-            if nextIndex != queueIndex { shuffleHistory.append(queueIndex) }
+            if shuffleDeck.isEmpty && repeatMode == .all {
+                shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
+            }
+            guard let shuffledNext = shuffleDeck.first else { return }
+            shuffleDeck.removeFirst()
+            nextIndex = shuffledNext
+            shuffleHistory.append(queueIndex)
         } else if queueIndex + 1 < playbackQueue.count {
             nextIndex = queueIndex + 1
         } else if repeatMode == .all {
@@ -241,7 +248,7 @@ final class CatalogService: ObservableObject {
         guard playbackQueue.indices.contains(index), index != queueIndex else { return }
         playbackQueue.remove(at: index)
         if index < queueIndex { queueIndex -= 1 }
-        shuffleHistory.removeAll()
+        resetShuffleState()
     }
 
     /// Keeps the current item and clears everything scheduled after it.
@@ -252,7 +259,7 @@ final class CatalogService: ObservableObject {
             return
         }
         playbackQueue = Array(playbackQueue.prefix(queueIndex + 1))
-        shuffleHistory.removeAll()
+        resetShuffleState()
     }
 
     func playPrevious() {
@@ -263,6 +270,7 @@ final class CatalogService: ObservableObject {
         }
         let previousIndex: Int
         if shuffleEnabled, let historic = shuffleHistory.popLast() {
+            shuffleDeck.insert(queueIndex, at: 0)
             queueIndex = historic
             Task { await playQueueItem(playbackQueue[queueIndex]) }
             return
@@ -280,7 +288,15 @@ final class CatalogService: ObservableObject {
 
     func toggleShuffle() {
         shuffleEnabled.toggle()
+        resetShuffleState()
+        if shuffleEnabled {
+            shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
+        }
+    }
+
+    private func resetShuffleState() {
         shuffleHistory.removeAll()
+        shuffleDeck.removeAll()
     }
 
     func cycleRepeatMode() {
@@ -296,8 +312,11 @@ final class CatalogService: ObservableObject {
         if repeatMode == .one {
             Task { await playQueueItem(playbackQueue[queueIndex]) }
         } else if shuffleEnabled && playbackQueue.count > 1 {
-            let candidates = playbackQueue.indices.filter { $0 != queueIndex }
-            if let next = candidates.randomElement() {
+            if shuffleDeck.isEmpty && repeatMode == .all {
+                shuffleDeck = playbackQueue.indices.filter { $0 != queueIndex }.shuffled()
+            }
+            if let next = shuffleDeck.first {
+                shuffleDeck.removeFirst()
                 shuffleHistory.append(queueIndex)
                 queueIndex = next
                 Task { await playQueueItem(playbackQueue[queueIndex]) }
