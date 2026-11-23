@@ -56,16 +56,18 @@ final class YouTubeKitService: ObservableObject {
     /// Resolves a playable audio stream URL for a YouTube video ID.
     func resolveStream(videoId: String) async -> String? {
         do {
-            let result = try await StreamResolver.resolve(
+            let request = StreamResolveRequest.playback(
                 videoId: videoId,
-                client: config.defaultClient,
-                using: client,
                 options: StreamResolveOptions(
                     forDownload: false,
                     audioQuality: .high,
                     videoQuality: .auto
-                ),
-                providers: StreamResolveProviders.none
+                )
+            )
+            let result = try await StreamFallback.resolveFirstValid(
+                request,
+                using: client,
+                providers: .none
             )
             return result.streamUrl
         } catch {
