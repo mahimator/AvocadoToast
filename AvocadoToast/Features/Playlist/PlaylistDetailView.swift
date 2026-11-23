@@ -147,11 +147,7 @@ final class PlaylistDetailViewModel: ObservableObject {
         let result = await YouTubeKitService.shared.fetchPlaylistTracks(playlistID: playlistID)
         self.playlistTitle = result.title
         self.playlist = result.tracks
-        if let first = result.tracks.first {
-            isSaved = result.tracks.allSatisfy { catalogService.isSaved($0) }
-        } else {
-            isSaved = false
-        }
+        isSaved = !result.tracks.isEmpty && result.tracks.allSatisfy { catalogService.isSaved($0) }
     }
 
     func playAll() {
