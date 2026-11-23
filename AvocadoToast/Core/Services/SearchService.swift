@@ -29,7 +29,7 @@ final class SearchService: ObservableObject {
     }
 
     /// Debounced search. Only the latest query within `delay` seconds is sent.
-    func debounceSearch(_ query: String, delay: Double = 0.4) {
+    func debounceSearch(_ query: String, type: SearchType = .songs, delay: Double = 0.4) {
         debounceTask?.cancel()
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -37,7 +37,7 @@ final class SearchService: ObservableObject {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             addRecent(trimmed)
-            catalogService.search(query: trimmed)
+            catalogService.search(query: trimmed, type: type)
         }
     }
 
