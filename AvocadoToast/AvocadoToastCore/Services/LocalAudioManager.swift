@@ -53,8 +53,9 @@ final class LocalAudioManager: ObservableObject {
                 ? Double(audioFile.length) / audioFile.processingFormat.sampleRate
                 : 0
             let asset = AVURLAsset(url: destination)
+            let metadata = asset.commonMetadata
             let title = AVMetadataItem.metadataItems(
-                from: asset.commonMetadata,
+                from: metadata,
                 withKey: AVMetadataKey.commonKeyTitle,
                 keySpace: .common
             ).first?.stringValue ?? sourceURL.deletingPathExtension().lastPathComponent
@@ -72,7 +73,7 @@ final class LocalAudioManager: ObservableObject {
             if let artworkData, UIImage(data: artworkData) != nil {
                 let artworkFile = audioDir.appendingPathComponent("\(id).artwork")
                     .appendingPathExtension("jpg")
-                try? artworkData.write(to: artworkFile, options: .atomic)
+                try? artworkData.write(to: artworkFile, options: Data.WritingOptions.atomic)
                 artworkPath = artworkFile.absoluteString
             } else {
                 artworkPath = nil
