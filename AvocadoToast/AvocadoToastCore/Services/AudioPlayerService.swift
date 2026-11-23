@@ -162,7 +162,25 @@ final class AudioPlayerService: ObservableObject {
         bufferIsLoaded = false
         audioFile = nil
         playerNode.stop()
+        itemStatusObservation?.invalidate()
         let item = AVPlayerItem(url: url)
+        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor in
+                guard let self, self.remotePlayer.currentItem === item else { return }
+                switch item.status {
+                case .readyToPlay:
+                    let itemDuration = item.duration.seconds
+                    if itemDuration.isFinite && itemDuration > 0 { self.duration = itemDuration }
+                    self.updateNowPlayingInfo()
+                case .failed:
+                    self.errorMessage = item.error?.localizedDescription ?? "This audio source couldn't be played."
+                    self.isPlaying = false
+                    self.updateNowPlayingInfo()
+                default:
+                    break
+                }
+            }
+        }
         remotePlayer.allowsExternalPlayback = true
         remotePlayer.replaceCurrentItem(with: item)
         remotePlayer.play()
@@ -238,6 +256,8 @@ final class AudioPlayerService: ObservableObject {
     }
 
     private func stopPlaybackOnly() {
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
         remotePlayer.pause()
         remotePlayer.replaceCurrentItem(with: nil)
         playerNode.stop()
