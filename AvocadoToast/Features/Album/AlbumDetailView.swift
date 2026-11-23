@@ -151,7 +151,7 @@ final class AlbumDetailViewModel: ObservableObject {
         defer { isLoading = false }
         let results = await catalogService.searchYouTube(query: query, limit: 20)
         self.tracks = results
-        self.albumTitle = results.first?.title ?? query
+        self.albumTitle = query
         self.artistName = results.first?.artist
         self.isSaved = !results.isEmpty && results.allSatisfy { catalogService.isSaved($0) }
     }
