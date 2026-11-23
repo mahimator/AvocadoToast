@@ -77,12 +77,35 @@ final class YouTubeKitService: ObservableObject {
 
     func fetchPlaylistTracks(playlistID: String, limit: Int = 100) async -> (title: String?, tracks: [YouTubeTrack]) {
         let browseID = YouTubeFeeds.playlistBrowseId(playlistID)
+        var rows: [[String: Any]] = []
+        var title: String?
+        var continuation: String?
+        var seenContinuations = Set<String>()
+        var pageCount = 0
+
         do {
-            let json = try await client.browse(browseId: browseID, client: config.defaultClient)
-            let title = playlistTitle(from: json)
-            let rows = LibraryBrowseParser.extractItems(from: json) ?? []
+            repeat {
+                let json: [String: Any]
+                if let continuation {
+                    json = try await client.browse(continuation: continuation)
+                } else {
+                    json = try await client.browse(browseId: browseID, client: config.defaultClient)
+                }
+                if title == nil { title = playlistTitle(from: json) }
+                rows.append(contentsOf: LibraryBrowseParser.extractItems(from: json) ?? [])
+                continuation = LibraryBrowseParser.extractContinuationToken(from: json)
+                pageCount += 1
+                if let continuation, !seenContinuations.insert(continuation).inserted {
+                    throw InnerTubeError.truncatedResponse("Playlist returned a repeated page token.")
+                }
+                // Bound network and memory use for enormous playlists.
+                if pageCount >= 20 || rows.count >= 500 { continuation = nil }
+            } while continuation != nil
+
+            var seenVideoIDs = Set<String>()
             let tracks = rows.compactMap { row -> YouTubeTrack? in
-                guard let song = LibraryBrowseParser.parseSong(row) else { return nil }
+                guard let song = LibraryBrowseParser.parseSong(row),
+                      seenVideoIDs.insert(song.videoId).inserted else { return nil }
                 return YouTubeTrack(
                     videoId: song.videoId,
                     title: song.title,
@@ -91,10 +114,10 @@ final class YouTubeKitService: ObservableObject {
                     thumbnailURL: song.thumbnailUrl
                 )
             }
-            return (title, Array(tracks.prefix(limit)))
+            return (title, Array(tracks.prefix(max(1, limit))))
         } catch {
             searchError = "Playlist couldn't be loaded: \(error.localizedDescription)"
-            return (nil, [])
+            return (title, [])
         }
     }
 
