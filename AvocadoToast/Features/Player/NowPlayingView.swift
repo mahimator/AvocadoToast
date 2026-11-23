@@ -66,7 +66,7 @@ struct NowPlayingView: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
-        .task(id: "\(player.currentTrack?.videoId ?? \"none\")|\(config.artworkBackgroundEnabled)") {
+        .task(id: "\(player.currentTrack?.videoId ?? String())|\(config.artworkBackgroundEnabled)") {
             await updateAmbientColor(for: player.currentTrack?.thumbnailURL)
         }
         .sheet(isPresented: $showingQueue) {
