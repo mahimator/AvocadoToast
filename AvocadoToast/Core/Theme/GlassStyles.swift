@@ -69,7 +69,6 @@ struct GlassBackground: View {
 }
 
 struct GlassCard<Content: View>: View {
-    @ObservedObject private var config = AppConfig.shared
     let cornerRadius: CGFloat
     let opacity: Double
     let showsShadow: Bool
