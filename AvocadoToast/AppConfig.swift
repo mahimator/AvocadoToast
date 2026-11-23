@@ -65,9 +65,9 @@ final class AppConfig: ObservableObject {
         } else {
             self.backendURL = URL(string: "http://localhost:8000")!
         }
-        self.enableGlassEffects = defaults.bool(forKey: Keys.enableGlassEffects)
+        self.enableGlassEffects = defaults.object(forKey: Keys.enableGlassEffects) as? Bool ?? true
         self.reduceMotion = defaults.bool(forKey: Keys.reduceMotion)
-        self.artworkBackgroundEnabled = defaults.bool(forKey: Keys.artworkBackgroundEnabled)
+        self.artworkBackgroundEnabled = defaults.object(forKey: Keys.artworkBackgroundEnabled) as? Bool ?? true
         if let savedAppearance = defaults.string(forKey: Keys.selectedAppearance),
            let appearance = Appearance(rawValue: savedAppearance) {
             self.selectedAppearance = appearance
