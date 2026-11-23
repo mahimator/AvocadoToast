@@ -28,6 +28,9 @@ final class CatalogService: ObservableObject {
 
     @Published var savedTracks: [YouTubeTrack] = []
 
+    private var searchTask: Task<Void, Never>?
+    private var activeSearchID: UUID?
+
     func refreshSavedTracks() {
         let library = LibraryService.shared
         library.refresh()
@@ -65,22 +68,31 @@ final class CatalogService: ObservableObject {
     // MARK: - Search
 
     func search(query: String, type: SearchType? = nil, limit: Int = 25) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            searchError = "Query cannot be empty"
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchTask?.cancel()
+        activeSearchID = nil
+
+        guard !trimmed.isEmpty else {
+            searchError = nil
             searchResults = []
             isSearching = false
             return
         }
 
+        let requestID = UUID()
+        activeSearchID = requestID
         isSearching = true
         searchError = nil
         searchResults = []
 
-        Task {
-            let results = await youtubeService.search(term: query, limit: limit)
-            guard !Task.isCancelled else { return }
+        searchTask = Task { [weak self, youtubeService] in
+            let results = await youtubeService.search(term: trimmed, limit: limit)
+            guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
             self.searchResults = results
+            self.searchError = youtubeService.searchError
             self.isSearching = false
+            self.searchTask = nil
+            self.activeSearchID = nil
         }
     }
 
@@ -89,6 +101,9 @@ final class CatalogService: ObservableObject {
     }
 
     func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        activeSearchID = nil
         isSearching = false
     }
 
