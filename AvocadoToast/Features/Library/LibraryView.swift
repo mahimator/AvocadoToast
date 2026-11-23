@@ -129,12 +129,27 @@ struct LibraryView: View {
     }
 
     private var filterPicker: some View {
-        Picker("Library filter", selection: $selectedFilter) {
-            ForEach(LibraryFilter.allCases) { filter in
-                Text(filter.title).tag(filter)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LibraryFilter.allCases) { filter in
+                    Button {
+                        selectedFilter = filter
+                    } label: {
+                        Text(filter.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(selectedFilter == filter ? ColorTokens.textPrimary : ColorTokens.textSecondary)
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 10)
+                            .background(
+                                selectedFilter == filter ? ColorTokens.accentMuted : ColorTokens.surfaceGlass,
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().strokeBorder(ColorTokens.separator))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
-        .pickerStyle(.segmented)
     }
 
     private var libraryIsEmpty: Bool {
