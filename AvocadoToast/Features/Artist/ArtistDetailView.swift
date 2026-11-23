@@ -137,21 +137,31 @@ final class ArtistDetailViewModel: ObservableObject {
     @Published var artistName: String?
 
     private let catalogService: CatalogService
+    private var activeLoadID: UUID?
 
     init(catalogService: CatalogService = .shared) {
         self.catalogService = catalogService
     }
 
     func load(query: String) async {
+        let requestID = UUID()
+        activeLoadID = requestID
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if activeLoadID == requestID {
+                isLoading = false
+                activeLoadID = nil
+            }
+        }
         if query.hasPrefix("UC") {
             let result = await YouTubeKitService.shared.fetchArtistTopTracks(channelID: query, limit: 25)
+            guard activeLoadID == requestID else { return }
             self.tracks = result.tracks
             self.artistName = result.name ?? query
             self.isSaved = !result.tracks.isEmpty && result.tracks.allSatisfy { catalogService.isSaved($0) }
         } else {
             let results = await catalogService.searchYouTube(query: query, limit: 20)
+            guard activeLoadID == requestID else { return }
             self.tracks = results
             self.artistName = query
             self.isSaved = !results.isEmpty && results.allSatisfy { catalogService.isSaved($0) }
