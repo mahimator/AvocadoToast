@@ -1,139 +1,163 @@
 import SwiftUI
-import WebKit
+import AuthenticationServices
 import Combine
 import SwiftyTube
 
+final class AuthPresentationProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        if let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) {
+            return window
+        }
+        return ASPresentationAnchor()
+    }
+}
+
+@MainActor
+final class SignInState: ObservableObject {
+    @Published var isCollecting = false
+    @Published var message: String?
+    @Published var shouldDismiss = false
+    var authSession: ASWebAuthenticationSession?
+    private let presentationProvider = AuthPresentationProvider()
+
+    func signInInApp() {
+        isCollecting = true
+        message = "Opening Google sign-in…"
+
+        let url = URL(string: "https://music.youtube.com/")!
+
+        authSession = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: nil
+        ) { _, error in
+            Task { @MainActor in
+                self.isCollecting = false
+                if let error {
+                    self.message = "Sign-in was cancelled."
+                } else {
+                    self.harvestSession()
+                }
+            }
+        }
+
+        authSession?.presentationContextProvider = presentationProvider
+        authSession?.start()
+    }
+
+    func importFromSafari() {
+        isCollecting = true
+        message = "Checking Safari cookies…"
+        harvestSession()
+    }
+
+    private func harvestSession() {
+        Task {
+            // Give cookies time to be written to shared storage
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+            let cookies = HTTPCookieStorage.shared.cookies ?? []
+            let youtubeCookies = cookies.filter { cookie in
+                cookie.domain.contains("youtube.com") || cookie.domain.contains("google.com")
+            }
+
+            var cookieDict: [String: String] = [:]
+            var sapisid: String?
+
+            for cookie in youtubeCookies {
+                cookieDict[cookie.name] = cookie.value
+                if cookie.name == "SAPISID" { sapisid = cookie.value }
+            }
+
+            DiagnosticLogger.shared.write("LOGIN harvested cookies=\(cookieDict.count) sapisid=\(sapisid != nil ? "yes" : "no")")
+
+            guard !cookieDict.isEmpty, let sapisid, !sapisid.isEmpty else {
+                self.message = "No YouTube session found in Safari. Sign in to music.youtube.com in Safari first, then try again."
+                self.isCollecting = false
+                return
+            }
+
+            let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: sapisid)
+            self.message = YouTubeAccountSession.shared.statusMessage
+            self.isCollecting = false
+            if success {
+                self.shouldDismiss = true
+            }
+        }
+    }
+}
+
 struct YouTubeGoogleLoginSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var isPresentingWebView = false
-    @State private var isCollecting = false
-    @State private var message: String?
-    @State private var webView: WKWebView?
+    @StateObject private var state = SignInState()
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 Text("Sign in to Google")
                     .font(.title2.bold())
-                Text("Sign in to YouTube Music below. Your session cookies will be saved securely on this device.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
 
-                if let message { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Option 1: Sign in here (passkeys supported)")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button {
-                    isPresentingWebView = true
-                } label: {
-                    if isCollecting { ProgressView().frame(maxWidth: .infinity) }
-                    else { Text("Sign in with Google").frame(maxWidth: .infinity) }
+                    Button {
+                        state.signInInApp()
+                    } label: {
+                        if state.isCollecting { ProgressView() }
+                        else { Text("Open Google Sign-In").frame(maxWidth: .infinity) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(state.isCollecting)
+
+                    Text("Uses the system sign-in view. Passkeys, Face ID, and saved Safari passwords work here.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isCollecting)
                 .padding(.horizontal)
-                .padding(.bottom, 8)
 
-                Text("Tap “Done” at the top when finished signing in.")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
+                Divider().padding(.vertical, 8)
 
-                Text("For passkeys or Face ID, sign in via Safari first, then return here.")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Option 2: Import from Safari")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        state.importFromSafari()
+                    } label: {
+                        if state.isCollecting { ProgressView() }
+                        else { Text("Import Safari Session").frame(maxWidth: .infinity) }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(state.isCollecting)
+
+                    Text("Sign in to music.youtube.com in Safari first, then tap this to import your session.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal)
+
+                if let message = state.message {
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+
+                Spacer(minLength: 20)
             }
             .navigationTitle("Google Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
             }
-            .sheet(isPresented: $isPresentingWebView) {
-                NavigationStack {
-                    VStack(spacing: 0) {
-                        HStack {
-                            Button("Done") {
-                                isPresentingWebView = false
-                                isCollecting = true
-                                message = "Harvesting session cookies…"
-                                Task {
-                                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                                    await harvestSession()
-                                    isCollecting = false
-                                }
-                            }
-                            .font(.headline)
-                            Spacer()
-                            Button("Cancel") {
-                                isPresentingWebView = false
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                        .padding()
-                        .background(.thinMaterial)
-
-                        GoogleLoginWebView(webView: $webView)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .presentationDetents([.large])
-            }
-            .onChange(of: message) { _, newValue in
-                if let newValue, newValue.hasPrefix("Signed in") {
+            .onChange(of: state.shouldDismiss) { _, shouldDismiss in
+                if shouldDismiss {
                     dismiss()
                 }
             }
-        }
-    }
-
-    private func harvestSession() async {
-        let cookies = HTTPCookieStorage.shared.cookies ?? []
-        let youtubeCookies = cookies.filter { cookie in
-            cookie.domain.contains("youtube.com") || cookie.domain.contains("google.com")
-        }
-
-        var cookieDict: [String: String] = [:]
-        var sapisid: String?
-
-        for cookie in youtubeCookies {
-            cookieDict[cookie.name] = cookie.value
-            if cookie.name == "SAPISID" { sapisid = cookie.value }
-        }
-
-        DiagnosticLogger.shared.write("LOGIN harvested cookies=\(cookieDict.count) sapisid=\(sapisid != nil ? "yes" : "no")")
-
-        guard !cookieDict.isEmpty, let sapisid, !sapisid.isEmpty else {
-            self.message = "Couldn't capture a complete session. Make sure you're signed in to YouTube Music, then try again."
-            return
-        }
-
-        let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: sapisid)
-        self.message = YouTubeAccountSession.shared.statusMessage
-        DiagnosticLogger.shared.write("LOGIN applySession success=\(success) message=\(YouTubeAccountSession.shared.statusMessage ?? "nil")")
-    }
-}
-
-struct GoogleLoginWebView: UIViewRepresentable {
-    @Binding var webView: WKWebView?
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
-        view.allowsBackForwardNavigationGestures = true
-        view.navigationDelegate = context.coordinator
-        webView = view
-        view.load(URLRequest(url: URL(string: "https://music.youtube.com/")!))
-        return view
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    class Coordinator: NSObject, WKNavigationDelegate {
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            DiagnosticLogger.shared.write("WEBVIEW didFinish url=\(webView.url?.absoluteString ?? "nil")")
         }
     }
 }
