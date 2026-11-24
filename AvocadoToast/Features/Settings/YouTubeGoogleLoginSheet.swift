@@ -61,9 +61,7 @@ private struct YouTubeSignInWebView: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        if webView !== uiView { webView = uiView }
-    }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
 struct YouTubeGoogleLoginSheet: View {
