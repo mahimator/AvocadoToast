@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @StateObject private var library = LibraryService.shared
+    @ObservedObject private var accountSession = YouTubeAccountSession.shared
     @ObservedObject private var config = AppConfig.shared
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
@@ -24,6 +25,17 @@ struct LibraryView: View {
             VStack(spacing: 18) {
                 header
                 if isImportingAudio { importProgressView }
+                if library.isSyncingYouTubeLibrary {
+                    ProgressView("Syncing your YouTube Music library…")
+                        .font(.footnote)
+                        .padding(.horizontal, 20)
+                } else if let syncError = library.youtubeLibraryError {
+                    Text("YouTube Music library couldn't refresh: \(syncError)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
+                }
+
                 filterPicker
                     .padding(.horizontal, 18)
 
@@ -60,7 +72,17 @@ struct LibraryView: View {
             } message: {
                 Text(importError ?? "")
             }
-            .onAppear { library.refresh() }
+            .task {
+                library.refresh()
+                if accountSession.isSignedIn {
+                    await library.syncYouTubeLibrary()
+                }
+            }
+            .onChange(of: accountSession.isSignedIn) { _, signedIn in
+                if signedIn {
+                    Task { await library.syncYouTubeLibrary() }
+                }
+            }
         }
     }
 
