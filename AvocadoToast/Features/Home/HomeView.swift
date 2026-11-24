@@ -36,7 +36,12 @@ struct HomeView: View {
             .background(ColorTokens.backgroundPrimary.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }
-            .task { await viewModel.loadIfNeeded() }
+            .task {
+                // Restore the saved account before requesting personalized
+                // Music Home; otherwise the first browse can race in guest mode.
+                await YouTubeAccountSession.shared.restore()
+                await viewModel.loadIfNeeded()
+            }
         }
     }
 
