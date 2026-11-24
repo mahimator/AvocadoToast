@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import AuthenticationServices
 import SwiftyTube
 
@@ -14,63 +15,22 @@ final class AuthPresentationProvider: NSObject, ASWebAuthenticationPresentationC
     }
 }
 
-struct YouTubeGoogleLoginSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var isCollecting = false
-    @State private var message: String?
-    @State private var authSession: ASWebAuthenticationSession?
-    @State private var presentationProvider = AuthPresentationProvider()
+/// Manages Google sign-in state so the ASWebAuthenticationSession completion
+/// handler can mutate it (structs can't be captured weakly in closures).
+@MainActor
+final class SignInState: ObservableObject {
+    @Published var isCollecting = false
+    @Published var message: String?
+    @Published var shouldDismiss = false
+    var authSession: ASWebAuthenticationSession?
+    private let presentationProvider = AuthPresentationProvider()
 
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                Text("Sign in to Google")
-                    .font(.title2.bold())
-                Text("Sign in to YouTube Music below. Your Google cookies will be shared with Safari, so if you're already signed in there, it's automatic.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
-
-                if let message { Text(message).font(.footnote).foregroundStyle(.secondary) }
-
-                Button {
-                    signIn()
-                } label: {
-                    if isCollecting { ProgressView().frame(maxWidth: .infinity) }
-                    else { Text("Sign in with Google").frame(maxWidth: .infinity) }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isCollecting)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
-                if authSession != nil {
-                    Button("I've signed in, continue") {
-                        finishSignIn()
-                    }
-                    .buttonStyle(.bordered)
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-                }
-
-                Text("Passkeys, Face ID, and saved passwords in Safari are supported.")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal)
-            }
-            .navigationTitle("Google Account")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
-            }
-        }
-    }
-
-    private func signIn() {
+    func signIn() {
         isCollecting = true
         message = "Opening Google sign-in…"
 
         let url = URL(string: "https://music.youtube.com/")!
-        // No callbackURLScheme — YouTube Music doesn't redirect back to our app.
-        // The user signs in, then taps "I've signed in, continue" to harvest cookies.
+
         authSession = ASWebAuthenticationSession(
             url: url,
             callbackURLScheme: nil
@@ -79,6 +39,9 @@ struct YouTubeGoogleLoginSheet: View {
                 self.isCollecting = false
                 if let error {
                     self.message = "Sign-in was cancelled."
+                } else {
+                    // Session completed — automatically harvest cookies
+                    self.harvestSession()
                 }
             }
         }
@@ -87,13 +50,8 @@ struct YouTubeGoogleLoginSheet: View {
         authSession?.start()
     }
 
-    private func finishSignIn() {
-        isCollecting = true
+    func harvestSession() {
         message = "Harvesting session cookies…"
-
-        // Cancel the session now that the user has finished signing in
-        authSession?.cancel()
-        authSession = nil
 
         Task {
             // Give cookies time to be written to shared storage
@@ -106,12 +64,10 @@ struct YouTubeGoogleLoginSheet: View {
 
             var cookieDict: [String: String] = [:]
             var sapisid: String?
-            var visitorData: String?
 
             for cookie in youtubeCookies {
                 cookieDict[cookie.name] = cookie.value
                 if cookie.name == "SAPISID" { sapisid = cookie.value }
-                if cookie.name == "Visitor-Data" { visitorData = cookie.value }
             }
 
             guard !cookieDict.isEmpty, let sapisid, !sapisid.isEmpty else {
@@ -123,7 +79,54 @@ struct YouTubeGoogleLoginSheet: View {
             let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: sapisid)
             self.message = YouTubeAccountSession.shared.statusMessage
             self.isCollecting = false
-            if success { self.dismiss() }
+            if success {
+                self.shouldDismiss = true
+            }
+        }
+    }
+}
+
+struct YouTubeGoogleLoginSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var state = SignInState()
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                Text("Sign in to Google")
+                    .font(.title2.bold())
+                Text("Sign in to YouTube Music below. Your Google cookies will be shared with Safari, so if you're already signed in there, it's automatic.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(.horizontal)
+
+                if let message = state.message {
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                }
+
+                Button {
+                    state.signIn()
+                } label: {
+                    if state.isCollecting { ProgressView().frame(maxWidth: .infinity) }
+                    else { Text("Sign in with Google").frame(maxWidth: .infinity) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(state.isCollecting)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+
+                Text("Passkeys, Face ID, and saved Safari passwords are supported.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(.horizontal)
+            }
+            .navigationTitle("Google Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+            }
+            .onChange(of: state.shouldDismiss) { _, shouldDismiss in
+                if shouldDismiss {
+                    dismiss()
+                }
+            }
         }
     }
 }
