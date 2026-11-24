@@ -26,9 +26,6 @@ struct AvocadoToastApp: App {
                 .environmentObject(AppCoordinator())
                  .modelContainer(PersistenceController.shared.container)
                 .preferredColorScheme(preferredScheme)
-                .task {
-                    await YouTubeAccountSession.shared.restore()
-                }
         }
     }
 }
