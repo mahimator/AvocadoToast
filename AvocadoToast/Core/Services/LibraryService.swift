@@ -362,15 +362,16 @@ final class LibraryService: ObservableObject {
                 }
             }
 
-            for item in snapshot.artists where !item.channelId.isEmpty {
-                if let existing = savedArtists.first(where: { $0.provider == "youtube" && $0.providerID == item.channelId }) {
+            for item in snapshot.artists {
+                guard let channelID = item.channelId, !channelID.isEmpty else { continue }
+                if let existing = savedArtists.first(where: { $0.provider == "youtube" && $0.providerID == channelID }) {
                     existing.name = item.title
                     existing.artworkURL = item.thumbnailURL
                 } else {
                     context.insert(ArtistModel(
-                        id: "youtube|\(item.channelId)",
+                        id: "youtube|\(channelID)",
                         provider: "youtube",
-                        providerID: item.channelId,
+                        providerID: channelID,
                         name: item.title,
                         artworkURL: item.thumbnailURL
                     ))
