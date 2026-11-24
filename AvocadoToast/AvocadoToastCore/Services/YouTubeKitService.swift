@@ -60,6 +60,72 @@ final class YouTubeKitService: ObservableObject {
         throw lastError ?? InnerTubeError.invalidResponse
     }
 
+    // MARK: - Personal YouTube Music library
+
+    func fetchLibrarySnapshot() async throws -> YouTubeLibrarySnapshot {
+        try? await client.ensureVisitorData()
+
+        let requests: [(String, String)] = [
+            ("songs", "FEmusic_liked_videos"),
+            ("playlists", "FEmusic_library_playlists"),
+            ("albums", "FEmusic_library_albums"),
+            ("artists", "FEmusic_library_artists")
+        ]
+        var responses: [String: [String: Any]] = [:]
+        var lastError: Error?
+
+        for (kind, browseID) in requests {
+            let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+            var response: [String: Any]?
+            for candidate in clients {
+                do {
+                    response = try await client.browse(browseId: browseID, client: candidate)
+                    break
+                } catch {
+                    lastError = error
+                    DiagnosticLogger.shared.write("LIBRARY \(kind) browse failed client=\(candidate.clientName): \(error.localizedDescription)")
+                }
+            }
+            if let response { responses[kind] = response }
+        }
+
+        guard !responses.isEmpty else {
+            throw lastError ?? InnerTubeError.invalidResponse
+        }
+
+        let songs = LibraryBrowseParser.parseSongs(from: responses["songs"] ?? [:])
+        let tracks = songs.map { song in
+            YouTubeTrack(
+                videoId: song.videoId,
+                title: song.title,
+                artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
+                duration: Double(song.duration),
+                thumbnailURL: song.thumbnailUrl
+            )
+        }
+
+        let playlists = LibraryBrowseParser.parsePlaylists(from: responses["playlists"] ?? [:]).map { item in
+            YouTubePlaylist(
+                playlistId: item.browseId,
+                title: item.title,
+                thumbnailURL: item.thumbnailUrl,
+                videoCountText: item.songCount.map { "\($0) songs" }
+            )
+        }
+
+        let albums = LibraryBrowseParser.parseAlbums(from: responses["albums"] ?? [:])
+        let artists = LibraryBrowseParser.parseArtists(from: responses["artists"] ?? [:]).map { item in
+            YouTubeChannel(
+                channelId: item.channelId ?? item.browseId,
+                title: item.name,
+                thumbnailURL: item.thumbnailUrl
+            )
+        }
+
+        DiagnosticLogger.shared.write("LIBRARY snapshot songs=\(tracks.count) playlists=\(playlists.count) albums=\(albums.count) artists=\(artists.count)")
+        return YouTubeLibrarySnapshot(tracks: tracks, playlists: playlists, albums: albums, artists: artists)
+    }
+
     // MARK: - Search
 
     func search(term: String, limit: Int = 25) async -> [YouTubeTrack] {
@@ -529,6 +595,13 @@ final class YouTubeKitService: ObservableObject {
             return []
         }
     }
+}
+
+struct YouTubeLibrarySnapshot {
+    let tracks: [YouTubeTrack]
+    let playlists: [YouTubePlaylist]
+    let albums: [ParsedAlbum]
+    let artists: [YouTubeChannel]
 }
 
 // MARK: - YouTube Track model
