@@ -332,7 +332,7 @@ final class LibraryService: ObservableObject {
                         provider: "youtube",
                         providerID: item.videoId,
                         title: item.title,
-                        artistName: item.artist ?? "Unknown Artist",
+                        artistName: item.artist,
                         artworkURL: item.thumbnailURL,
                         duration: item.duration,
                         isVideo: true,
@@ -354,7 +354,7 @@ final class LibraryService: ObservableObject {
                         provider: "youtube",
                         providerID: item.browseId,
                         title: item.title,
-                        artistName: item.artist,
+                        artistName: item.artist ?? "Unknown Artist",
                         artworkURL: item.thumbnailUrl,
                         trackCount: item.songCount,
                         albumType: "album"
