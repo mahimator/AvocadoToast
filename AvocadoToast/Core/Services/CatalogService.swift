@@ -687,10 +687,25 @@ final class CatalogService: ObservableObject {
 
     private func parseMusicTwoRowItemRenderer(_ renderer: [String: Any]) -> YouTubeTrack? {
         // Extract videoId from navigationEndpoint
-        guard let nav = renderer["navigationEndpoint"] as? [String: Any],
-              let watch = nav["watchEndpoint"] as? [String: Any],
-              let videoId = watch["videoId"] as? String, !videoId.isEmpty else {
-            DiagnosticLogger.shared.write("HOME parseHomeVideoItem: no videoId in musicTwoRowItemRenderer")
+        let videoId: String?
+        if let nav = renderer["navigationEndpoint"] as? [String: Any] {
+            DiagnosticLogger.shared.write("HOME parseMusicTwoRowItemRenderer: nav keys: \(nav.keys.sorted())")
+            if let watch = nav["watchEndpoint"] as? [String: Any],
+               let vid = watch["videoId"] as? String, !vid.isEmpty {
+                videoId = vid
+            } else if let browse = nav["browseEndpoint"] as? [String: Any],
+                      let vid = browse["browseId"] as? String, !vid.isEmpty {
+                videoId = vid
+            } else {
+                videoId = nil
+            }
+        } else if let onTap = renderer["onTap"] as? [String: Any],
+                  let innertube = onTap["innertubeCommand"] as? [String: Any],
+                  let watch = innertube["watchEndpoint"] as? [String: Any],
+                  let vid = watch["videoId"] as? String, !vid.isEmpty {
+            videoId = vid
+        } else {
+            DiagnosticLogger.shared.write("HOME parseMusicTwoRowItemRenderer: no videoId in renderer")
             return nil
         }
 
@@ -731,7 +746,7 @@ final class CatalogService: ObservableObject {
         }
 
         return YouTubeTrack(
-            videoId: videoId,
+            videoId: videoId!,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             artist: artist,
             duration: 0,
