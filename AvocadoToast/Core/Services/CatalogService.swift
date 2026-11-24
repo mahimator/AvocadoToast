@@ -283,8 +283,37 @@ final class CatalogService: ObservableObject {
                 DiagnosticLogger.shared.write("HOME candidates from twoColumn: \(candidates.count)")
             }
 
+            // Strategy 4: SwiftyTube's music-row parser understands Music
+            // responsive list renderers that the generic video parser skips.
+            if candidates.isEmpty {
+                let musicSongs = LibraryBrowseParser.parseSongs(from: json)
+                DiagnosticLogger.shared.write("HOME music-row parser found: \(musicSongs.count)")
+                candidates = musicSongs.map { song in
+                    YouTubeTrack(
+                        videoId: song.videoId,
+                        title: song.title,
+                        artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
+                        duration: Double(song.duration),
+                        thumbnailURL: song.thumbnailUrl
+                    )
+                }
+            }
+
             var seen = Set<String>()
-            homeTracks = candidates.filter { seen.insert($0.videoId).inserted }.prefix(36).map { $0 }
+            let parsedTracks = candidates.filter {
+                !$0.videoId.isEmpty && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && seen.insert($0.videoId).inserted
+            }.prefix(36).map { $0 }
+
+            guard !parsedTracks.isEmpty else {
+                let message = "YouTube Music returned a home response, but no playable music rows could be parsed."
+                homeError = message
+                DiagnosticLogger.shared.logHome(success: false, trackCount: 0, error: message)
+                return
+            }
+
+            homeTracks = parsedTracks
+            homeError = nil
             DiagnosticLogger.shared.logHome(success: true, trackCount: homeTracks.count, error: nil)
         } catch {
             guard homeRequestID == requestID else { return }
