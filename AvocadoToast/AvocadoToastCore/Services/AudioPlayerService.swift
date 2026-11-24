@@ -5,7 +5,6 @@
 //  Local files use AVAudioEngine (including the 10-band EQ).
 //  Legitimate remote media URLs use AVPlayer, which supports streaming.
 //
-
 import Foundation
 import Combine
 import AVFoundation
@@ -41,7 +40,6 @@ final class AudioPlayerService: ObservableObject {
     private var timeControlObservation: NSKeyValueObservation?
     private var shouldResumeAfterInterruption = false
 
-
     private init() {
         setupEngine()
         setupRemoteObservers()
@@ -49,14 +47,17 @@ final class AudioPlayerService: ObservableObject {
         configureAudioSession()
     }
 
+    // MARK: - Audio Session
+
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
+            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetooth])
             try session.setActive(true)
             setupSessionObservers(session)
         } catch {
             errorMessage = "Audio session setup failed: \(error.localizedDescription)"
+            DiagnosticLogger.shared.write("AUDIO_SESSION setup failed: \(error.localizedDescription)")
         }
     }
 
@@ -69,8 +70,6 @@ final class AudioPlayerService: ObservableObject {
             errorMessage = "Audio engine start failed: \(error.localizedDescription)"
         }
     }
-
-
 
     private func setupRemoteObservers() {
         remoteTimeObserver = remotePlayer.addPeriodicTimeObserver(
@@ -103,18 +102,9 @@ final class AudioPlayerService: ObservableObject {
                 self.onPlaybackFinished?()
             }
         }
-
-        timeControlObservation = remotePlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-            Task { @MainActor in
-                guard let self, self.isRemotePlayback else { return }
-                self.isPlaying = player.timeControlStatus == .playing
-                if player.timeControlStatus == .playing {
-                    self.errorMessage = nil
-                }
-                self.updateNowPlayingInfo()
-            }
-        }
     }
+
+    // MARK: - Public playback
 
     func play(_ track: YouTubeTrack) async {
         stopPlaybackOnly()
@@ -124,8 +114,6 @@ final class AudioPlayerService: ObservableObject {
         duration = 0
         updateNowPlayingMetadata(for: track)
 
-        DiagnosticLogger.shared.write("PLAYBACK play track='\(track.videoId)' title='\(track.title)' streamURL=\(track.streamURL ?? "nil")")
-
         if let localPath = track.localFileURL, !localPath.isEmpty {
             playLocalFile(at: URL(fileURLWithPath: localPath))
             return
@@ -134,13 +122,15 @@ final class AudioPlayerService: ObservableObject {
         guard let streamURL = track.streamURL,
               let url = URL(string: streamURL),
               ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
-            DiagnosticLogger.shared.write("PLAYBACK no valid streamURL for track='\(track.videoId)'")
             errorMessage = "This track has no valid playback source."
+            DiagnosticLogger.shared.write("PLAYBACK no valid streamURL for track='\(track.videoId)'")
             return
         }
 
         playRemoteURL(url)
     }
+
+    // MARK: - Local file playback
 
     private func playLocalFile(at url: URL) {
         guard url.isFileURL else {
@@ -161,12 +151,15 @@ final class AudioPlayerService: ObservableObject {
         }
     }
 
+    // MARK: - Remote URL playback
+
     private func playRemoteURL(_ url: URL) {
         isRemotePlayback = true
         bufferIsLoaded = false
         audioFile = nil
         playerNode.stop()
         itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
 
         // YouTube stream URLs require proper HTTP headers (User-Agent, client headers)
         // otherwise AVPlayer returns "Cannot Open". Use AVURLAsset with header options.
@@ -176,6 +169,8 @@ final class AudioPlayerService: ObservableObject {
                 "X-YouTube-Client-Name": "5",
                 "X-YouTube-Client-Version": "21.26.4",
                 "X-YouTube-Device": "1",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.youtube.com/"
             ]
         ])
         let item = AVPlayerItem(asset: asset)
@@ -186,7 +181,6 @@ final class AudioPlayerService: ObservableObject {
                 case .readyToPlay:
                     let itemDuration = item.duration.seconds
                     if itemDuration.isFinite && itemDuration > 0 { self.duration = itemDuration }
-                    // Start only after AVPlayer confirms that the item is playable.
                     self.remotePlayer.play()
                     self.isPlaying = self.remotePlayer.timeControlStatus == .playing
                     self.errorMessage = nil
@@ -204,10 +198,11 @@ final class AudioPlayerService: ObservableObject {
         }
         remotePlayer.allowsExternalPlayback = true
         remotePlayer.replaceCurrentItem(with: item)
-        // Wait for readyToPlay before reporting that playback has begun.
         isPlaying = false
         updateNowPlayingInfo()
     }
+
+    // MARK: - Local engine playback
 
     private func playLocalEngine() {
         guard bufferIsLoaded, let audioFile else {
@@ -238,6 +233,8 @@ final class AudioPlayerService: ObservableObject {
         startProgressTimer()
         updateNowPlayingInfo()
     }
+
+    // MARK: - Playback control
 
     func pause() {
         if isRemotePlayback {
@@ -348,6 +345,8 @@ final class AudioPlayerService: ObservableObject {
         }
     }
 
+    // MARK: - Progress timer
+
     private func startProgressTimer() {
         stopProgressTimer()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -456,6 +455,8 @@ final class AudioPlayerService: ObservableObject {
         }
     }
 
+    // MARK: - Now Playing
+
     private func updateNowPlayingMetadata(for track: YouTubeTrack) {
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: track.title,
@@ -489,10 +490,6 @@ final class AudioPlayerService: ObservableObject {
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
-
-
-
-
 
     deinit {
         if let remoteTimeObserver {

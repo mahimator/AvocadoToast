@@ -252,11 +252,13 @@ final class YouTubeKitService: ObservableObject {
                 using: client,
                 providers: .live
             )
-            if let url = usableURL(result.streamUrl) {
+            if let mimeType = result.mimeType as? String,
+               isAACCompatible(mimeType),
+               let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: true, error: nil)
                 return url
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "Provider returned an invalid stream URL")
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "No AAC-compatible stream URL from fallback provider")
         } catch {
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: error.localizedDescription)
         }
@@ -270,7 +272,9 @@ final class YouTubeKitService: ObservableObject {
                 using: client,
                 providers: .live
             )
-            if let url = usableURL(result.streamUrl) {
+            if let mimeType = result.mimeType as? String,
+               isAACCompatible(mimeType),
+               let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: true, error: nil)
                 return url
             }
