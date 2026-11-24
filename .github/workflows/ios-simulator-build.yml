@@ -12,12 +12,18 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 30
+    concurrency:
+      group: ios-simulator-build-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show Xcode version
         run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project AvocadoToast.xcodeproj
 
       - name: Build iOS Simulator target
         run: |
@@ -27,5 +33,6 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            SWIFT_ENABLE_EXPLICIT_MODULES=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
