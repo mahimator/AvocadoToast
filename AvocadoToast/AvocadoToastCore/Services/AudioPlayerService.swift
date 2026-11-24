@@ -101,7 +101,10 @@ final class AudioPlayerService: ObservableObject {
                 self.currentTime = self.duration
                 self.updateNowPlayingInfo()
                 self.onPlaybackFinished?()
-                timeControlObservation = remotePlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+            }
+        }
+
+        timeControlObservation = remotePlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
             Task { @MainActor in
                 guard let self, self.isRemotePlayback else { return }
                 self.isPlaying = player.timeControlStatus == .playing
@@ -110,8 +113,6 @@ final class AudioPlayerService: ObservableObject {
                 }
                 self.updateNowPlayingInfo()
             }
-        }
-    }
         }
     }
 
