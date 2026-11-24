@@ -167,8 +167,19 @@ final class AudioPlayerService: ObservableObject {
         audioFile = nil
         playerNode.stop()
         itemStatusObservation?.invalidate()
-        let item = AVPlayerItem(url: url)
-        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+
+        // YouTube stream URLs require proper HTTP headers (User-Agent, client headers)
+        // otherwise AVPlayer returns "Cannot Open". Use AVURLAsset with header options.
+        let asset = AVURLAsset(url: url, options: [
+            "AVURLAssetHTTPHeaderFieldsKey": [
+                "User-Agent": "com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+                "X-YouTube-Client-Name": "5",
+                "X-YouTube-Client-Version": "21.26.4",
+                "X-YouTube-Device": "1",
+            ]
+        ])
+        let item = AVPlayerItem(asset: asset)
+        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] (item: AVPlayerItem, _) in
             Task { @MainActor in
                 guard let self, self.remotePlayer.currentItem === item else { return }
                 switch item.status {
