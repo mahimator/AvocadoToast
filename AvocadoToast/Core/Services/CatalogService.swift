@@ -303,22 +303,38 @@ final class CatalogService: ObservableObject {
                                         for (sectionIdx, section) in sections.enumerated() {
                                             DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] keys: \(section.keys.sorted())")
                                             if let itemSection = section["itemSectionRenderer"] as? [String: Any] {
-                                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] itemSectionRenderer keys: \(itemSection.keys.sorted())")
-                                                if let shelfContents = itemSection["contents"] as? [[String: Any]] {
-                                                    DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] contents: \(shelfContents.count)")
-                                                    for content in shelfContents {
-                                                        if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
-                                                           let items = musicShelf["contents"] as? [[String: Any]] {
-                                                            DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] shelf items: \(items.count)")
-                                                            for item in items {
-                                                                if let video = parseHomeVideoItem(item) {
-                                                                    candidates.append(video)
-                                                                }
+                                            DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] itemSectionRenderer keys: \(itemSection.keys.sorted())")
+                                            if let shelfContents = itemSection["contents"] as? [[String: Any]] {
+                                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] contents: \(shelfContents.count)")
+                                                for content in shelfContents {
+                                                    if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
+                                                       let items = musicShelf["contents"] as? [[String: Any]] {
+                                                        DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] shelf items: \(items.count)")
+                                                        for item in items {
+                                                            if let video = parseHomeVideoItem(item) {
+                                                                candidates.append(video)
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
+                                        }
+                                        // Music Home shelves appear directly as section renderers:
+                                        // musicCarouselShelfRenderer or musicTastebuilderShelfRenderer
+                                        for shelfKey in ["musicCarouselShelfRenderer", "musicTastebuilderShelfRenderer"] {
+                                            if let shelf = section[shelfKey] as? [String: Any] {
+                                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] \(shelfKey) keys: \(shelf.keys.sorted())")
+                                                if let items = shelf["contents"] as? [[String: Any]] {
+                                                    DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] \(shelfKey) items: \(items.count)")
+                                                    for (itemIdx, item) in items.enumerated() {
+                                                        DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] \(shelfKey) item[\(itemIdx)] keys: \(item.keys.sorted())")
+                                                        if let video = parseHomeVideoItem(item) {
+                                                            candidates.append(video)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         }
                                     }
                                 } else {
@@ -598,8 +614,18 @@ final class CatalogService: ObservableObject {
 
     /// Parse a single video item from a musicShelfRenderer contents array.
     private func parseHomeVideoItem(_ item: [String: Any]) -> YouTubeTrack? {
-        guard let renderer = item["musicResponsiveListItemRenderer"] as? [String: Any] else { return nil }
+        // Try musicResponsiveListItemRenderer first (carousel shelves)
+        if let renderer = item["musicResponsiveListItemRenderer"] as? [String: Any] {
+            return parseMusicResponsiveListItemRenderer(renderer)
+        }
+        // Try musicTwoRowItemRenderer (mix shelves)
+        if let renderer = item["musicTwoRowItemRenderer"] as? [String: Any] {
+            return parseMusicTwoRowItemRenderer(renderer)
+        }
+        return nil
+    }
 
+    private func parseMusicResponsiveListItemRenderer(_ renderer: [String: Any]) -> YouTubeTrack? {
         // Extract videoId
         let videoId: String?
         if let vid = renderer["videoId"] as? String {
@@ -609,6 +635,7 @@ final class CatalogService: ObservableObject {
                   let vid = watch["videoId"] as? String {
             videoId = vid
         } else {
+            DiagnosticLogger.shared.write("HOME parseHomeVideoItem: no videoId in musicResponsiveListItemRenderer")
             return nil
         }
         guard let videoId, !videoId.isEmpty else { return nil }
@@ -646,6 +673,60 @@ final class CatalogService: ObservableObject {
            let thumbnails = thumb["thumbnails"] as? [[String: Any]],
            let last = thumbnails.last,
            let url = last["url"] as? String {
+            thumbnailURL = url
+        }
+
+        return YouTubeTrack(
+            videoId: videoId,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            artist: artist,
+            duration: 0,
+            thumbnailURL: thumbnailURL
+        )
+    }
+
+    private func parseMusicTwoRowItemRenderer(_ renderer: [String: Any]) -> YouTubeTrack? {
+        // Extract videoId from navigationEndpoint
+        guard let nav = renderer["navigationEndpoint"] as? [String: Any],
+              let watch = nav["watchEndpoint"] as? [String: Any],
+              let videoId = watch["videoId"] as? String, !videoId.isEmpty else {
+            DiagnosticLogger.shared.write("HOME parseHomeVideoItem: no videoId in musicTwoRowItemRenderer")
+            return nil
+        }
+
+        // Extract title
+        var title = "Unknown"
+        if let titleObj = renderer["title"] as? [String: Any],
+           let runs = titleObj["runs"] as? [[String: Any]],
+           let firstRun = runs.first,
+           let t = firstRun["text"] as? String {
+            title = t
+        }
+
+        // Extract artist from subtitle
+        var artist = "Unknown Artist"
+        if let subtitleObj = renderer["subtitle"] as? [String: Any],
+           let runs = subtitleObj["runs"] as? [[String: Any]],
+           let firstRun = runs.first,
+           let a = firstRun["text"] as? String {
+            artist = a
+        }
+
+        // Extract thumbnail
+        var thumbnailURL: String?
+        if let thumbnailRenderer = renderer["thumbnailRenderer"] as? [String: Any],
+           let musicThumbnail = thumbnailRenderer["musicThumbnailRenderer"] as? [String: Any],
+           let thumb = musicThumbnail["thumbnail"] as? [String: Any],
+           let thumbnails = thumb["thumbnails"] as? [[String: Any]],
+           let last = thumbnails.last,
+           let url = last["url"] as? String {
+            thumbnailURL = url
+        } else if let thumbnail = renderer["thumbnail"] as? [String: Any],
+                  let musicThumbnail = thumbnail["musicThumbnailRenderer"] as? [String: Any],
+                  let thumb = musicThumbnail["thumbnail"] as? [String: Any],
+                  let thumbnails = thumb["thumbnails"] as? [[String: Any]],
+                  let last = thumbnails.last,
+                  let url = last["url"] as? String {
             thumbnailURL = url
         }
 
