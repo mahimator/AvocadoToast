@@ -38,6 +38,7 @@ final class AudioPlayerService: ObservableObject {
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var itemStatusObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
     private var shouldResumeAfterInterruption = false
 
 
@@ -100,7 +101,17 @@ final class AudioPlayerService: ObservableObject {
                 self.currentTime = self.duration
                 self.updateNowPlayingInfo()
                 self.onPlaybackFinished?()
+                timeControlObservation = remotePlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, self.isRemotePlayback else { return }
+                self.isPlaying = player.timeControlStatus == .playing
+                if player.timeControlStatus == .playing {
+                    self.errorMessage = nil
+                }
+                self.updateNowPlayingInfo()
             }
+        }
+    }
         }
     }
 
