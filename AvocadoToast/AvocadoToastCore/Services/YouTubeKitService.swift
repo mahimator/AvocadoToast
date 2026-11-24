@@ -211,6 +211,39 @@ final class YouTubeKitService: ObservableObject {
             return value
         }
 
+        func isAACCompatible(_ mimeType: String?) -> Bool {
+            guard let mime = mimeType?.lowercased() else { return false }
+            return mime.contains("mp4a") || mime.contains("aac") || mime.contains("mp4")
+        }
+
+        // Strategy 1: Direct iOS client player response — gives iPhone-compatible
+        // URLs with AAC/MP4A formats that AVPlayer can play natively.
+        do {
+            let response = try await client.player(videoId: videoId, client: .iOS)
+            if let streamingData = response["streamingData"] as? [String: Any] {
+                let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
+                    + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
+                // Try AAC-compatible formats first, then any audio format
+                let ordered = formats.sorted { lhs, rhs in
+                    let lhsAAC = isAACCompatible(lhs["mimeType"] as? String)
+                    let rhsAAC = isAACCompatible(rhs["mimeType"] as? String)
+                    if lhsAAC && !rhsAAC { return true }
+                    if !lhsAAC && rhsAAC { return false }
+                    return false
+                }
+                for format in ordered {
+                    if let url = usableURL(format["url"] as? String) {
+                        DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: true, error: nil)
+                        return url
+                    }
+                }
+            }
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: "No directly usable audio URL in iOS player response")
+        } catch {
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: error.localizedDescription)
+        }
+
+        // Strategy 2: SwiftyTube's complete live provider bundle.
         let request = StreamResolveRequest.playback(
             videoId: videoId,
             options: StreamResolveOptions(
@@ -219,9 +252,6 @@ final class YouTubeKitService: ObservableObject {
                 videoQuality: .auto
             )
         )
-
-        // First use SwiftyTube's complete live provider bundle. This is the
-        // path that can resolve player JS signatures and ciphered formats.
         do {
             let result = try await StreamFallback.resolveFirstValid(
                 request,
@@ -229,36 +259,15 @@ final class YouTubeKitService: ObservableObject {
                 providers: .live
             )
             if let url = usableURL(result.streamUrl) {
-                DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "fallback_live", success: true, error: nil)
+                DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: true, error: nil)
                 return url
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "fallback_live", success: false, error: "Provider returned an invalid stream URL")
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "Provider returned an invalid stream URL")
         } catch {
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "fallback_live", success: false, error: error.localizedDescription)
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: error.localizedDescription)
         }
 
-        // A direct iOS player response can expose already-resolved audio URLs.
-        do {
-            let response = try await client.player(videoId: videoId, client: .iOS)
-            if let streamingData = response["streamingData"] as? [String: Any] {
-                let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
-                    + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
-                let audioFormats = formats.filter {
-                    ($0["mimeType"] as? String ?? "").contains("audio")
-                }
-                for format in audioFormats + formats {
-                    if let url = usableURL(format["url"] as? String) {
-                        DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player", success: true, error: nil)
-                        return url
-                    }
-                }
-            }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player", success: false, error: "Player response contained no directly usable audio URL")
-        } catch {
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player", success: false, error: error.localizedDescription)
-        }
-
-        // Always run the standard YouTube client chain as the final fallback.
+        // Strategy 3: Standard YouTube client chain as the final fallback.
         do {
             var fallbackRequest = request
             fallbackRequest.chain = ClientFallbackChain.youtube
@@ -277,6 +286,7 @@ final class YouTubeKitService: ObservableObject {
             searchError = "Stream resolution failed: \(error.localizedDescription)"
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: false, error: error.localizedDescription)
         }
+
         return nil
     }
 

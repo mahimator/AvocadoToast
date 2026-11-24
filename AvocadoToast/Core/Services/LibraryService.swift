@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftData
+import SwiftyTube
 
 /// Library service backed by SwiftData. All saved music lives locally and
 /// survives application restarts. It does not depend on an active

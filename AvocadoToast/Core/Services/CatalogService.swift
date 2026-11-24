@@ -283,7 +283,38 @@ final class CatalogService: ObservableObject {
                 DiagnosticLogger.shared.write("HOME candidates from twoColumn: \(candidates.count)")
             }
 
-            // Strategy 4: SwiftyTube's music-row parser understands Music
+            // Strategy 4: Parse from singleColumnBrowseResultsRenderer (Music Home structure)
+            if candidates.isEmpty {
+                DiagnosticLogger.shared.write("HOME trying singleColumnBrowseResultsRenderer")
+                if let contents = json["contents"] as? [String: Any],
+                   let singleColumn = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
+                   let tabs = singleColumn["tabs"] as? [[String: Any]] {
+                    for tab in tabs {
+                        if let tabContent = tab["tabContent"] as? [String: Any],
+                           let sectionList = tabContent["sectionListRenderer"] as? [String: Any],
+                           let sections = sectionList["contents"] as? [[String: Any]] {
+                            for section in sections {
+                                if let itemSection = section["itemSectionRenderer"] as? [String: Any],
+                                   let shelfContents = itemSection["contents"] as? [[String: Any]] {
+                                    for content in shelfContents {
+                                        if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
+                                           let items = musicShelf["contents"] as? [[String: Any]] {
+                                            for item in items {
+                                                if let video = parseHomeVideoItem(item) {
+                                                    candidates.append(video)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                DiagnosticLogger.shared.write("HOME candidates from singleColumn: \(candidates.count)")
+            }
+
+            // Strategy 5: SwiftyTube's music-row parser understands Music
             // responsive list renderers that the generic video parser skips.
             if candidates.isEmpty {
                 let musicSongs = LibraryBrowseParser.parseSongs(from: json)
