@@ -287,28 +287,48 @@ final class CatalogService: ObservableObject {
             if candidates.isEmpty {
                 DiagnosticLogger.shared.write("HOME trying singleColumnBrowseResultsRenderer")
                 if let contents = json["contents"] as? [String: Any],
-                   let singleColumn = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
-                   let tabs = singleColumn["tabs"] as? [[String: Any]] {
-                    for tab in tabs {
-                        if let tabContent = tab["tabContent"] as? [String: Any],
-                           let sectionList = tabContent["sectionListRenderer"] as? [String: Any],
-                           let sections = sectionList["contents"] as? [[String: Any]] {
-                            for section in sections {
-                                if let itemSection = section["itemSectionRenderer"] as? [String: Any],
-                                   let shelfContents = itemSection["contents"] as? [[String: Any]] {
-                                    for content in shelfContents {
-                                        if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
-                                           let items = musicShelf["contents"] as? [[String: Any]] {
-                                            for item in items {
-                                                if let video = parseHomeVideoItem(item) {
-                                                    candidates.append(video)
+                   let singleColumn = contents["singleColumnBrowseResultsRenderer"] as? [String: Any] {
+                    DiagnosticLogger.shared.write("HOME singleColumn keys: \(singleColumn.keys.sorted())")
+                    if let tabs = singleColumn["tabs"] as? [[String: Any]] {
+                        DiagnosticLogger.shared.write("HOME tabs count: \(tabs.count)")
+                        for (tabIdx, tab) in tabs.enumerated() {
+                            DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] keys: \(tab.keys.sorted())")
+                            if let tabContent = tab["tabRenderer"] as? [String: Any] {
+                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] tabRenderer keys: \(tabContent.keys.sorted())")
+                                if let sectionList = tabContent["sectionListRenderer"] as? [String: Any] {
+                                    DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] sectionListRenderer keys: \(sectionList.keys.sorted())")
+                                    if let sections = sectionList["contents"] as? [[String: Any]] {
+                                        DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] sections: \(sections.count)")
+                                        for (sectionIdx, section) in sections.enumerated() {
+                                            DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] keys: \(section.keys.sorted())")
+                                            if let itemSection = section["itemSectionRenderer"] as? [String: Any] {
+                                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] itemSectionRenderer keys: \(itemSection.keys.sorted())")
+                                                if let shelfContents = itemSection["contents"] as? [[String: Any]] {
+                                                    DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] contents: \(shelfContents.count)")
+                                                    for content in shelfContents {
+                                                        if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
+                                                           let items = musicShelf["contents"] as? [[String: Any]] {
+                                                            DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] section[\(sectionIdx)] shelf items: \(items.count)")
+                                                            for item in items {
+                                                                if let video = parseHomeVideoItem(item) {
+                                                                    candidates.append(video)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
+                                } else {
+                                    DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] NO sectionListRenderer in tabContent")
                                 }
+                            } else {
+                                DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] NO tabContent")
                             }
                         }
+                    } else {
+                        DiagnosticLogger.shared.write("HOME NO tabs in singleColumn")
                     }
                 }
                 DiagnosticLogger.shared.write("HOME candidates from singleColumn: \(candidates.count)")
