@@ -48,12 +48,15 @@ final class YouTubeKitService: ObservableObject {
         var lastError: Error?
         for client in clients {
             do {
-                return try await self.client.browse(browseId: "FEmusic_home", client: client)
+                let json = try await self.client.browse(browseId: "FEmusic_home", client: client)
+                DiagnosticLogger.shared.logHome(success: true, trackCount: 0, error: nil)
+                return json
             } catch {
                 lastError = error
                 continue
             }
         }
+        DiagnosticLogger.shared.logHome(success: false, trackCount: 0, error: lastError?.localizedDescription)
         throw lastError ?? InnerTubeError.invalidResponse
     }
 
@@ -84,7 +87,7 @@ final class YouTubeKitService: ObservableObject {
                 let songs = LibraryBrowseParser.parseSongs(from: json)
                 if !songs.isEmpty {
                     var seen = Set<String>()
-                    return songs.filter { seen.insert($0.videoId).inserted }
+                    let result = songs.filter { seen.insert($0.videoId).inserted }
                         .prefix(limit).map { song in
                             YouTubeTrack(
                                 videoId: song.videoId,
@@ -94,11 +97,13 @@ final class YouTubeKitService: ObservableObject {
                                 thumbnailURL: song.thumbnailUrl
                             )
                         }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "songs", client: client.clientName, resultCount: result.count, error: nil)
+                    return Array(result)
                 }
 
                 let videos = YouTubeFeedParser.searchResults(in: json).videos
                 if !videos.isEmpty {
-                    return videos.prefix(limit).map { video in
+                    let result = videos.prefix(limit).map { video in
                         YouTubeTrack(
                             videoId: video.videoId,
                             title: video.title,
@@ -107,9 +112,12 @@ final class YouTubeKitService: ObservableObject {
                             thumbnailURL: video.thumbnailURL
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "videos", client: client.clientName, resultCount: result.count, error: nil)
+                    return result
                 }
             } catch {
                 lastError = error
+                DiagnosticLogger.shared.logSearch(term: term, type: "songs", client: client.clientName, resultCount: 0, error: error.localizedDescription)
                 continue
             }
         }
@@ -119,6 +127,7 @@ final class YouTubeKitService: ObservableObject {
         } else {
             searchError = "No results found. \(YouTubeAccountSession.shared.isSignedIn ? "" : "Sign in to YouTube Music to search.")"
         }
+        DiagnosticLogger.shared.logSearch(term: term, type: "songs", client: "all_failed", resultCount: 0, error: searchError)
         return []
     }
 
@@ -143,8 +152,11 @@ final class YouTubeKitService: ObservableObject {
                 using: client,
                 providers: .live
             )
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "fallback_live", success: true, error: nil)
             return result.streamUrl
-        } catch {
+        } catch let e1 {
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "fallback_live", success: false, error: e1.localizedDescription)
+
             // Attempt 2: Direct iOS client player response — does not need PoToken.
             do {
                 let response = try await client.player(
@@ -155,6 +167,7 @@ final class YouTubeKitService: ObservableObject {
                    let formats = streamingData["formats"] as? [[String: Any]],
                    let first = formats.first,
                    let url = first["url"] as? String, !url.isEmpty {
+                    DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player", success: true, error: nil)
                     return url
                 }
                 // Try adaptive formats too (DASH audio-only)
@@ -162,9 +175,12 @@ final class YouTubeKitService: ObservableObject {
                    let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]],
                    let audio = adaptive.first(where: { ($0["mimeType"] as? String ?? "").contains("audio") }),
                    let url = audio["url"] as? String, !url.isEmpty {
+                    DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player_adaptive", success: true, error: nil)
                     return url
                 }
-            } catch {
+            } catch let e2 {
+                DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "ios_player", success: false, error: e2.localizedDescription)
+
                 // Attempt 3: YouTube fallback chain (uses .web instead of .webRemix)
                 do {
                     var request = StreamResolveRequest.playback(
@@ -181,14 +197,16 @@ final class YouTubeKitService: ObservableObject {
                         using: client,
                         providers: .live
                     )
+                    DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: true, error: nil)
                     return result.streamUrl
-                } catch {
-                    searchError = "Stream resolution failed: \(error.localizedDescription)"
+                } catch let e3 {
+                    DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: false, error: e3.localizedDescription)
+                    searchError = "Stream resolution failed: \(e3.localizedDescription)"
                     return nil
                 }
             }
-            return nil
         }
+        return nil
     }
 
     // MARK: - Typed catalog search
@@ -208,33 +226,39 @@ final class YouTubeKitService: ObservableObject {
                 // First try the dedicated library-style parser
                 let artists = LibraryBrowseParser.parseArtists(from: json)
                 if !artists.isEmpty {
-                    return artists.prefix(limit).map { artist in
+                    let result = artists.prefix(limit).map { artist in
                         YouTubeChannel(
                             channelId: artist.channelId ?? artist.browseId,
                             title: artist.name,
                             thumbnailURL: artist.thumbnailUrl
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "artists", client: client.clientName, resultCount: result.count, error: nil)
+                    return Array(result)
                 }
                 // Fallback: general search results — search responses use a
                 // different JSON structure than browse pages, so LibraryBrowseParser
                 // often returns empty. YouTubeFeedParser is more tolerant.
                 let results = YouTubeFeedParser.searchResults(in: json)
                 if !results.channels.isEmpty {
-                    return results.channels.prefix(limit).map { channel in
+                    let result = results.channels.prefix(limit).map { channel in
                         YouTubeChannel(
                             channelId: channel.channelId ?? channel.handle ?? channel.title,
                             title: channel.title,
                             thumbnailURL: channel.thumbnailURL
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "artists", client: client.clientName, resultCount: result.count, error: nil)
+                    return Array(result)
                 }
             } catch {
                 lastError = error
+                DiagnosticLogger.shared.logSearch(term: term, type: "artists", client: client.clientName, resultCount: 0, error: error.localizedDescription)
                 continue
             }
         }
         searchError = lastError.map { "Artist search failed: \($0.localizedDescription)" } ?? "Artist search failed"
+        DiagnosticLogger.shared.logSearch(term: term, type: "artists", client: "all_failed", resultCount: 0, error: searchError)
         return []
     }
 
@@ -252,7 +276,7 @@ final class YouTubeKitService: ObservableObject {
                 )
                 let playlists = LibraryBrowseParser.parsePlaylists(from: json)
                 if !playlists.isEmpty {
-                    return playlists.prefix(limit).map { playlist in
+                    let result = playlists.prefix(limit).map { playlist in
                         YouTubePlaylist(
                             playlistId: playlist.browseId,
                             title: playlist.title,
@@ -260,10 +284,12 @@ final class YouTubeKitService: ObservableObject {
                             videoCountText: playlist.songCount.map { "\($0) songs" }
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "playlists", client: client.clientName, resultCount: result.count, error: nil)
+                    return Array(result)
                 }
                 let results = YouTubeFeedParser.searchResults(in: json)
                 if !results.playlists.isEmpty {
-                    return results.playlists.prefix(limit).map { playlist in
+                    let result = results.playlists.prefix(limit).map { playlist in
                         YouTubePlaylist(
                             playlistId: playlist.playlistId,
                             title: playlist.title,
@@ -271,13 +297,17 @@ final class YouTubeKitService: ObservableObject {
                             videoCountText: playlist.videoCountText
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "playlists", client: client.clientName, resultCount: result.count, error: nil)
+                    return Array(result)
                 }
             } catch {
                 lastError = error
+                DiagnosticLogger.shared.logSearch(term: term, type: "playlists", client: client.clientName, resultCount: 0, error: error.localizedDescription)
                 continue
             }
         }
         searchError = lastError.map { "Playlist search failed: \($0.localizedDescription)" } ?? "Playlist search failed"
+        DiagnosticLogger.shared.logSearch(term: term, type: "playlists", client: "all_failed", resultCount: 0, error: searchError)
         return []
     }
 
@@ -290,13 +320,17 @@ final class YouTubeKitService: ObservableObject {
             do {
                 let json = try await self.client.search(query: term, client: client)
                 let albums = LibraryBrowseParser.parseAlbums(from: json)
-                if !albums.isEmpty { return Array(albums.prefix(limit)) }
+                if !albums.isEmpty {
+                    let result = Array(albums.prefix(limit))
+                    DiagnosticLogger.shared.logSearch(term: term, type: "albums", client: client.clientName, resultCount: result.count, error: nil)
+                    return result
+                }
                 // Albums in search results appear as lockupViewModel with contentType
                 // containing ALBUM — handled by YouTubeFeedParser.playlists() which
                 // also collects lockupViewModel entries.
                 let results = YouTubeFeedParser.searchResults(in: json)
                 if !results.playlists.isEmpty {
-                    return results.playlists.prefix(limit).map { playlist in
+                    let result = results.playlists.prefix(limit).map { playlist in
                         ParsedAlbum(
                             browseId: playlist.playlistId,
                             title: playlist.title,
@@ -307,13 +341,17 @@ final class YouTubeKitService: ObservableObject {
                             playlistId: playlist.playlistId
                         )
                     }
+                    DiagnosticLogger.shared.logSearch(term: term, type: "albums", client: client.clientName, resultCount: result.count, error: nil)
+                    return result
                 }
             } catch {
                 lastError = error
+                DiagnosticLogger.shared.logSearch(term: term, type: "albums", client: client.clientName, resultCount: 0, error: error.localizedDescription)
                 continue
             }
         }
         searchError = lastError.map { "Album search failed: \($0.localizedDescription)" } ?? "Album search failed"
+        DiagnosticLogger.shared.logSearch(term: term, type: "albums", client: "all_failed", resultCount: 0, error: searchError)
         return []
     }
 

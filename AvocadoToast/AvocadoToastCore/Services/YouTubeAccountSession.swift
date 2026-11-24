@@ -44,10 +44,12 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
             account = info
             isSignedIn = true
             statusMessage = "Signed in as \(info.name)"
+            DiagnosticLogger.shared.logSession(signedIn: true, accountName: info.name)
             return true
         } catch {
             keychainDelete()
             await YouTubeKitService.shared.useGuestSession()
+            DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
             statusMessage = "Sign-in couldn't be verified: \(error.localizedDescription)"
             return false
         }
@@ -57,6 +59,7 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
         guard loadSavedAuth() != nil else {
             isSignedIn = false
             account = nil
+            DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
             return
         }
         await YouTubeKitService.shared.loadSavedSession()
@@ -71,6 +74,7 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
                 account = nil
                 isSignedIn = false
                 await YouTubeKitService.shared.useGuestSession()
+                DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
                 statusMessage = "Saved Google session expired. Sign in again."
             }
         } catch {
@@ -78,6 +82,7 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
             account = nil
             isSignedIn = false
             await YouTubeKitService.shared.useGuestSession()
+            DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
             statusMessage = "Couldn't verify saved Google session. Sign in again."
         }
     }
@@ -88,6 +93,7 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
         isSignedIn = false
         statusMessage = "Signed out. Using guest catalog."
         await YouTubeKitService.shared.useGuestSession()
+        DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
     }
 
     private func loadSavedAuth() -> AuthState? {

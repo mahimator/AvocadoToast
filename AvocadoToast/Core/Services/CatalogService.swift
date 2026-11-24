@@ -231,11 +231,13 @@ final class CatalogService: ObservableObject {
 
             var seen = Set<String>()
             homeTracks = candidates.filter { seen.insert($0.videoId).inserted }.prefix(36).map { $0 }
+            DiagnosticLogger.shared.logHome(success: true, trackCount: homeTracks.count, error: nil)
         } catch {
             guard homeRequestID == requestID else { return }
             // Preserve the last good feed so a transient network/API failure
             // does not blank the home screen during refresh.
             homeError = error.localizedDescription
+            DiagnosticLogger.shared.logHome(success: false, trackCount: 0, error: error.localizedDescription)
         }
     }
 
