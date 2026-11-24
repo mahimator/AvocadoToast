@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import WebKit
 import Combine
 import SwiftyTube
 
@@ -38,7 +39,7 @@ final class SignInState: ObservableObject {
                 if let error {
                     self.message = "Sign-in was cancelled."
                 } else {
-                    self.harvestSession()
+                    self.harvestCookies()
                 }
             }
         }
@@ -50,36 +51,49 @@ final class SignInState: ObservableObject {
     func importFromSafari() {
         isCollecting = true
         message = "Checking Safari cookies…"
-        harvestSession()
+        harvestCookies()
     }
 
-    private func harvestSession() {
+    private func harvestCookies() {
         Task {
-            // Give cookies time to be written to shared storage
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-
-            let cookies = HTTPCookieStorage.shared.cookies ?? []
-            let youtubeCookies = cookies.filter { cookie in
-                cookie.domain.contains("youtube.com") || cookie.domain.contains("google.com")
-            }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
 
             var cookieDict: [String: String] = [:]
             var sapisid: String?
 
-            for cookie in youtubeCookies {
-                cookieDict[cookie.name] = cookie.value
-                if cookie.name == "SAPISID" { sapisid = cookie.value }
+            await withCheckedContinuation { continuation in
+                WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+                    let youtubeCookies = cookies.filter { cookie in
+                        cookie.domain.contains("youtube.com") || cookie.domain.contains("google.com")
+                    }
+                    for cookie in youtubeCookies {
+                        cookieDict[cookie.name] = cookie.value
+                        if cookie.name == "SAPISID" { sapisid = cookie.value }
+                    }
+                    DiagnosticLogger.shared.write("LOGIN WKWebsiteDataStore: cookies=\(cookieDict.count) sapisid=\(sapisid != nil ? "yes" : "no")")
+                    continuation.resume()
+                }
             }
 
-            DiagnosticLogger.shared.write("LOGIN harvested cookies=\(cookieDict.count) sapisid=\(sapisid != nil ? "yes" : "no")")
+            if cookieDict.isEmpty || sapisid == nil {
+                let httpCookies = HTTPCookieStorage.shared.cookies ?? []
+                let ytCookies = httpCookies.filter { cookie in
+                    cookie.domain.contains("youtube.com") || cookie.domain.contains("google.com")
+                }
+                for cookie in ytCookies {
+                    cookieDict[cookie.name] = cookie.value
+                    if cookie.name == "SAPISID" { sapisid = cookie.value }
+                }
+                DiagnosticLogger.shared.write("LOGIN HTTPCookieStorage: cookies=\(cookieDict.count) sapisid=\(sapisid != nil ? "yes" : "no")")
+            }
 
-            guard !cookieDict.isEmpty, let sapisid, !sapisid.isEmpty else {
-                self.message = "No YouTube session found in Safari. Sign in to music.youtube.com in Safari first, then try again."
+            guard !cookieDict.isEmpty, let finalSapisid = sapisid, !finalSapisid.isEmpty else {
+                self.message = "No YouTube session found. Sign in to music.youtube.com first, then try again."
                 self.isCollecting = false
                 return
             }
 
-            let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: sapisid)
+            let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: finalSapisid)
             self.message = YouTubeAccountSession.shared.statusMessage
             self.isCollecting = false
             if success {
@@ -100,7 +114,7 @@ struct YouTubeGoogleLoginSheet: View {
                     .font(.title2.bold())
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Option 1: Sign in here (passkeys supported)")
+                    Text("Option 1: Sign in here")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -113,7 +127,7 @@ struct YouTubeGoogleLoginSheet: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(state.isCollecting)
 
-                    Text("Uses the system sign-in view. Passkeys, Face ID, and saved Safari passwords work here.")
+                    Text("Uses the system sign-in view. Passkeys, Face ID, and saved Safari passwords work here. Tap the system “Done” button when finished.")
                         .font(.caption2).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -135,7 +149,7 @@ struct YouTubeGoogleLoginSheet: View {
                     .buttonStyle(.bordered)
                     .disabled(state.isCollecting)
 
-                    Text("Sign in to music.youtube.com in Safari first, then tap this to import your session.")
+                    Text("Sign in to music.youtube.com in Safari first, then tap this to import your session cookies.")
                         .font(.caption2).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
