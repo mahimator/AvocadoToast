@@ -201,53 +201,86 @@ final class CatalogService: ObservableObject {
             for shelf in shelves.prefix(10) {
                 DiagnosticLogger.shared.write("HOME shelf title='\(shelf.title ?? "nil")' videos=\(shelf.videos.count) playlists=\(shelf.playlists.count)")
             }
-            let excludedShelfTerms = ["shorts", "podcast", "news", "gaming", "kids", "live"]
-            let preferredShelfTerms = [
-                "mix", "quick picks", "recommended", "for you", "listen again",
-                "new music", "new releases", "music", "song", "album", "playlist", "radio"
-            ]
-
-            let filteredShelves = shelves.filter { shelf in
-                let title = (shelf.title ?? "").lowercased()
-                return !excludedShelfTerms.contains(where: title.contains)
-            }
-            let preferredShelves = filteredShelves.filter { shelf in
-                let title = (shelf.title ?? "").lowercased()
-                return preferredShelfTerms.contains(where: title.contains)
-            }
-            let sourceShelves = preferredShelves.isEmpty ? filteredShelves : preferredShelves
 
             var candidates: [YouTubeTrack] = []
-            DiagnosticLogger.shared.write("HOME sourceShelves count: \(sourceShelves.count)")
-            for shelf in sourceShelves {
-                for video in shelf.videos where !video.isShort && !video.isLive {
-                    let title = video.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !title.isEmpty, !video.videoId.isEmpty else { continue }
-                    candidates.append(YouTubeTrack(
-                        videoId: video.videoId,
-                        title: title,
-                        artist: video.channelTitle ?? "Unknown Artist",
-                        duration: video.durationSeconds.map { Double($0) } ?? 0,
-                        thumbnailURL: video.thumbnailURL
-                    ))
-                }
-            }
-            DiagnosticLogger.shared.write("HOME candidates from shelves: \(candidates.count)")
 
-            // Some Home responses expose video renderers without shelf wrappers.
-            // Keep that as a fallback, still sourced from the actual Home feed.
-            if candidates.isEmpty {
-                candidates = YouTubeFeedParser.videos(in: json)
-                    .filter { !$0.isShort && !$0.isLive && !$0.videoId.isEmpty && !$0.title.isEmpty }
-                    .map { video in
-                        YouTubeTrack(
+            // Strategy 1: Parse from shelves (most common structure)
+            if !shelves.isEmpty {
+                let excludedShelfTerms = ["shorts", "podcast", "news", "gaming", "kids", "live"]
+                let preferredShelfTerms = [
+                    "mix", "quick picks", "recommended", "for you", "listen again",
+                    "new music", "new releases", "music", "song", "album", "playlist", "radio"
+                ]
+
+                let filteredShelves = shelves.filter { shelf in
+                    let title = (shelf.title ?? "").lowercased()
+                    return !excludedShelfTerms.contains(where: title.contains)
+                }
+                let preferredShelves = filteredShelves.filter { shelf in
+                    let title = (shelf.title ?? "").lowercased()
+                    return preferredShelfTerms.contains(where: title.contains)
+                }
+                let sourceShelves = preferredShelves.isEmpty ? filteredShelves : preferredShelves
+
+                DiagnosticLogger.shared.write("HOME sourceShelves count: \(sourceShelves.count)")
+                for shelf in sourceShelves {
+                    for video in shelf.videos where !video.isShort && !video.isLive {
+                        let title = video.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !title.isEmpty, !video.videoId.isEmpty else { continue }
+                        candidates.append(YouTubeTrack(
                             videoId: video.videoId,
-                            title: video.title,
+                            title: title,
                             artist: video.channelTitle ?? "Unknown Artist",
                             duration: video.durationSeconds.map { Double($0) } ?? 0,
                             thumbnailURL: video.thumbnailURL
-                        )
+                        ))
                     }
+                }
+                DiagnosticLogger.shared.write("HOME candidates from shelves: \(candidates.count)")
+            }
+
+            // Strategy 2: Direct video extraction from contents (fallback when shelves are empty)
+            if candidates.isEmpty {
+                DiagnosticLogger.shared.write("HOME shelves empty, trying direct video extraction")
+                let directVideos = YouTubeFeedParser.videos(in: json)
+                    .filter { !$0.isShort && !$0.isLive && !$0.videoId.isEmpty && !$0.title.isEmpty }
+                DiagnosticLogger.shared.write("HOME direct videos found: \(directVideos.count)")
+                candidates = directVideos.map { video in
+                    YouTubeTrack(
+                        videoId: video.videoId,
+                        title: video.title,
+                        artist: video.channelTitle ?? "Unknown Artist",
+                        duration: video.durationSeconds.map { Double($0) } ?? 0,
+                        thumbnailURL: video.thumbnailURL
+                    )
+                }
+            }
+
+            // Strategy 3: Parse from twoColumnBrowseResultsRenderer (alternative home structure)
+            if candidates.isEmpty {
+                DiagnosticLogger.shared.write("HOME trying twoColumnBrowseResultsRenderer")
+                if let contents = json["contents"] as? [String: Any],
+                   let twoColumn = contents["twoColumnBrowseResultsRenderer"] as? [String: Any],
+                   let secondary = twoColumn["secondaryContents"] as? [String: Any],
+                   let sectionList = secondary["sectionListRenderer"] as? [String: Any],
+                   let sections = sectionList["contents"] as? [[String: Any]] {
+                    for section in sections {
+                        if let itemSection = section["itemSectionRenderer"] as? [String: Any],
+                           let contents = itemSection["contents"] as? [[String: Any]] {
+                            for content in contents {
+                                if let musicShelf = content["musicShelfRenderer"] as? [String: Any],
+                                   let shelfContents = musicShelf["contents"] as? [[String: Any]] {
+                                    for item in shelfContents {
+                                        if let video = parseHomeVideoItem(item) {
+                                            candidates.append(video)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                DiagnosticLogger.shared.write("HOME candidates from twoColumn: \(candidates.count)")
             }
 
             var seen = Set<String>()
@@ -475,6 +508,68 @@ final class CatalogService: ObservableObject {
 
     func seek(to time: Double) {
         audioPlayer.seek(to: time)
+    }
+
+    /// Parse a single video item from a musicShelfRenderer contents array.
+    private func parseHomeVideoItem(_ item: [String: Any]) -> YouTubeTrack? {
+        guard let renderer = item["musicResponsiveListItemRenderer"] as? [String: Any] else { return nil }
+
+        // Extract videoId
+        let videoId: String?
+        if let vid = renderer["videoId"] as? String {
+            videoId = vid
+        } else if let nav = renderer["navigationEndpoint"] as? [String: Any],
+                  let watch = nav["watchEndpoint"] as? [String: Any],
+                  let vid = watch["videoId"] as? String {
+            videoId = vid
+        } else {
+            return nil
+        }
+        guard let videoId, !videoId.isEmpty else { return nil }
+
+        // Extract title from flexColumns[0]
+        var title = "Unknown"
+        if let flexColumns = renderer["flexColumns"] as? [[String: Any]],
+           let col0 = flexColumns.first,
+           let flexCol = col0["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+           let text = flexCol["text"] as? [String: Any],
+           let runs = text["runs"] as? [[String: Any]],
+           let firstRun = runs.first,
+           let t = firstRun["text"] as? String {
+            title = t
+        }
+
+        // Extract artist from flexColumns[1]
+        var artist = "Unknown Artist"
+        if let flexColumns = renderer["flexColumns"] as? [[String: Any]],
+           flexColumns.count > 1,
+           let col1 = flexColumns[1] as? [String: Any],
+           let flexCol = col1["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+           let text = flexCol["text"] as? [String: Any],
+           let runs = text["runs"] as? [[String: Any]],
+           let firstRun = runs.first,
+           let a = firstRun["text"] as? String {
+            artist = a
+        }
+
+        // Extract thumbnail
+        var thumbnailURL: String?
+        if let thumbnail = renderer["thumbnail"] as? [String: Any],
+           let musicThumbnail = thumbnail["musicThumbnailRenderer"] as? [String: Any],
+           let thumb = musicThumbnail["thumbnail"] as? [String: Any],
+           let thumbnails = thumb["thumbnails"] as? [[String: Any]],
+           let last = thumbnails.last,
+           let url = last["url"] as? String {
+            thumbnailURL = url
+        }
+
+        return YouTubeTrack(
+            videoId: videoId,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            artist: artist,
+            duration: 0,
+            thumbnailURL: thumbnailURL
+        )
     }
 
 }
