@@ -223,16 +223,10 @@ final class YouTubeKitService: ObservableObject {
             if let streamingData = response["streamingData"] as? [String: Any] {
                 let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
                     + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
-                // Try AAC-compatible formats first, then any audio format
-                let ordered = formats.sorted { lhs, rhs in
-                    let lhsAAC = isAACCompatible(lhs["mimeType"] as? String)
-                    let rhsAAC = isAACCompatible(rhs["mimeType"] as? String)
-                    if lhsAAC && !rhsAAC { return true }
-                    if !lhsAAC && rhsAAC { return false }
-                    return false
-                }
-                for format in ordered {
-                    if let url = usableURL(format["url"] as? String) {
+                // AAC-compatible formats only — WebM/Opus won't play in AVPlayer
+                for format in formats {
+                    if isAACCompatible(format["mimeType"] as? String),
+                       let url = usableURL(format["url"] as? String) {
                         DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: true, error: nil)
                         return url
                     }
