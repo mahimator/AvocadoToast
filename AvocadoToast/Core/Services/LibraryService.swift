@@ -63,10 +63,14 @@ final class LibraryService: ObservableObject {
         // TrackModel.id is globally unique in SwiftData, so prevent collisions
         // across providers as well as duplicate saves within one provider.
         let exists = savedTracks.contains { $0.id == track.id }
-        guard !exists else { return }
+        guard !exists else {
+            DiagnosticLogger.shared.write("LIBRARY saveTrack skip exists id='\(track.id)' provider='\(track.provider)'")
+            return
+        }
         context.insert(track)
         save()
         refresh()
+        DiagnosticLogger.shared.write("LIBRARY saveTrack saved id='\(track.id)' provider='\(track.provider)' title='\(track.title)'")
     }
 
     func saveTracks(_ tracks: [TrackModel]) {
@@ -142,13 +146,16 @@ final class LibraryService: ObservableObject {
             isVideo: track.provider != "local",
             isPlayable: true
         )
+        DiagnosticLogger.shared.write("LIBRARY toggleSave id='\(track.videoId)' provider='\(track.provider)' title='\(track.title)' isSaved=\(isTrackSaved(id: track.videoId, provider: track.provider))")
         toggleSave(domain)
     }
 
     func toggleSave(_ domain: DomainTrack) {
         if isTrackSaved(id: domain.id, provider: domain.provider) {
+            DiagnosticLogger.shared.write("LIBRARY toggleSave removing id='\(domain.id)' provider='\(domain.provider)'")
             removeTrack(by: domain.id, provider: domain.provider)
         } else {
+            DiagnosticLogger.shared.write("LIBRARY toggleSave adding id='\(domain.id)' provider='\(domain.provider)'")
             saveTrack(from: domain)
         }
     }

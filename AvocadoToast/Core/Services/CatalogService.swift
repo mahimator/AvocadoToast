@@ -181,6 +181,21 @@ final class CatalogService: ObservableObject {
             let json = try await youtubeService.fetchMusicHome()
             guard homeRequestID == requestID else { return }
 
+            // Dump top-level JSON keys for diagnostics
+            DiagnosticLogger.shared.write("HOME top-level keys: \(json.keys.sorted())")
+            if let contents = json["contents"] as? [String: Any] {
+                DiagnosticLogger.shared.write("HOME contents keys: \(contents.keys.sorted())")
+            }
+            if let contents = json["contents"] as? [[String: Any]] {
+                DiagnosticLogger.shared.write("HOME contents array count: \(contents.count)")
+                for (i, item) in contents.prefix(5).enumerated() {
+                    DiagnosticLogger.shared.write("HOME content[\(i)] keys: \(item.keys.sorted())")
+                }
+            }
+            if let responseContext = json["responseContext"] as? [String: Any] {
+                DiagnosticLogger.shared.write("HOME responseContext present: true")
+            }
+
             let shelves = YouTubeFeedParser.shelves(in: json)
             DiagnosticLogger.shared.write("HOME shelves found: \(shelves.count)")
             for shelf in shelves.prefix(10) {

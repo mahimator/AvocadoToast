@@ -112,6 +112,8 @@ final class AudioPlayerService: ObservableObject {
         duration = 0
         updateNowPlayingMetadata(for: track)
 
+        DiagnosticLogger.shared.write("PLAYBACK play track='\(track.videoId)' title='\(track.title)' streamURL=\(track.streamURL ?? "nil")")
+
         if let localPath = track.localFileURL, !localPath.isEmpty {
             playLocalFile(at: URL(fileURLWithPath: localPath))
             return
@@ -120,6 +122,7 @@ final class AudioPlayerService: ObservableObject {
         guard let streamURL = track.streamURL,
               let url = URL(string: streamURL),
               ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            DiagnosticLogger.shared.write("PLAYBACK no valid streamURL for track='\(track.videoId)'")
             errorMessage = "This track has no valid playback source."
             return
         }
@@ -165,10 +168,12 @@ final class AudioPlayerService: ObservableObject {
                     self.isPlaying = self.remotePlayer.timeControlStatus == .playing
                     self.errorMessage = nil
                     self.updateNowPlayingInfo()
+                    DiagnosticLogger.shared.write("PLAYBACK readyToPlay track='\(self.currentTrack?.videoId ?? "nil")' isPlaying=\(self.isPlaying) duration=\(self.duration)")
                 case .failed:
                     self.errorMessage = item.error?.localizedDescription ?? "This audio source couldn't be played."
                     self.isPlaying = false
                     self.updateNowPlayingInfo()
+                    DiagnosticLogger.shared.write("PLAYBACK failed track='\(self.currentTrack?.videoId ?? "nil")' error=\(item.error?.localizedDescription ?? "unknown")")
                 default:
                     break
                 }
