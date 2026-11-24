@@ -358,6 +358,11 @@ final class CatalogService: ObservableObject {
         }
         guard playbackRequestID == requestID else { return }
         await audioPlayer.play(prepared)
+        if track.provider != "local" && prepared.streamURL == nil {
+            audioPlayer.errorMessage = youtubeService.searchError
+                ?? "YouTube Music did not provide a playable audio stream for this track."
+            DiagnosticLogger.shared.write("PLAYBACK resolution failed videoId='\(track.videoId)' detail='\(audioPlayer.errorMessage ?? "unknown")'")
+        }
         guard playbackRequestID == requestID else { return }
         if audioPlayer.isPlaying { LibraryService.shared.recordPlayed(track) }
     }
