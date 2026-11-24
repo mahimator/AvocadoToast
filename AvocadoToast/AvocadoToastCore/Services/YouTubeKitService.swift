@@ -126,6 +126,9 @@ final class YouTubeKitService: ObservableObject {
 
     /// Resolves a playable audio stream URL for a YouTube video ID.
     func resolveStream(videoId: String) async -> String? {
+        // Attempt 1: Standard fallback chain with live providers
+        // (signature timestamp, cipher, player JS). Tries multiple clients
+        // including webRemix which needs a PoToken — may fail without one.
         do {
             let request = StreamResolveRequest.playback(
                 videoId: videoId,
@@ -135,10 +138,6 @@ final class YouTubeKitService: ObservableObject {
                     videoQuality: .auto
                 )
             )
-            // SwiftyTube's live provider bundle wires its documented PoToken,
-            // signature timestamp, cipher and WebView-backed helpers. The previous
-            // .none configuration left those hooks disabled, causing protected
-            // streams to fail even when the package could resolve them.
             let result = try await StreamFallback.resolveFirstValid(
                 request,
                 using: client,
@@ -146,7 +145,48 @@ final class YouTubeKitService: ObservableObject {
             )
             return result.streamUrl
         } catch {
-            searchError = "Stream resolution failed: \(error.localizedDescription)"
+            // Attempt 2: Direct iOS client player response — does not need PoToken.
+            do {
+                let response = try await client.player(
+                    videoId: videoId,
+                    client: .iOS
+                )
+                if let streamingData = response["streamingData"] as? [String: Any],
+                   let formats = streamingData["formats"] as? [[String: Any]],
+                   let first = formats.first,
+                   let url = first["url"] as? String, !url.isEmpty {
+                    return url
+                }
+                // Try adaptive formats too (DASH audio-only)
+                if let streamingData = response["streamingData"] as? [String: Any],
+                   let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]],
+                   let audio = adaptive.first(where: { ($0["mimeType"] as? String ?? "").contains("audio") }),
+                   let url = audio["url"] as? String, !url.isEmpty {
+                    return url
+                }
+            } catch {
+                // Attempt 3: YouTube fallback chain (uses .web instead of .webRemix)
+                do {
+                    var request = StreamResolveRequest.playback(
+                        videoId: videoId,
+                        options: StreamResolveOptions(
+                            forDownload: false,
+                            audioQuality: .high,
+                            videoQuality: .auto
+                        )
+                    )
+                    request.chain = ClientFallbackChain.youtube
+                    let result = try await StreamFallback.resolveFirstValid(
+                        request,
+                        using: client,
+                        providers: .live
+                    )
+                    return result.streamUrl
+                } catch {
+                    searchError = "Stream resolution failed: \(error.localizedDescription)"
+                    return nil
+                }
+            }
             return nil
         }
     }
@@ -157,6 +197,7 @@ final class YouTubeKitService: ObservableObject {
         searchError = nil
         try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        var lastError: Error?
         for client in clients {
             do {
                 let json = try await self.client.search(
@@ -164,16 +205,36 @@ final class YouTubeKitService: ObservableObject {
                     params: YouTubeSearchFilter.channel.rawValue,
                     client: client
                 )
-                return LibraryBrowseParser.parseArtists(from: json).prefix(limit).map { artist in
-                    YouTubeChannel(
-                        channelId: artist.channelId ?? artist.browseId,
-                        title: artist.name,
-                        thumbnailURL: artist.thumbnailUrl
-                    )
+                // First try the dedicated library-style parser
+                let artists = LibraryBrowseParser.parseArtists(from: json)
+                if !artists.isEmpty {
+                    return artists.prefix(limit).map { artist in
+                        YouTubeChannel(
+                            channelId: artist.channelId ?? artist.browseId,
+                            title: artist.name,
+                            thumbnailURL: artist.thumbnailUrl
+                        )
+                    }
                 }
-            } catch { continue }
+                // Fallback: general search results — search responses use a
+                // different JSON structure than browse pages, so LibraryBrowseParser
+                // often returns empty. YouTubeFeedParser is more tolerant.
+                let results = YouTubeFeedParser.searchResults(in: json)
+                if !results.channels.isEmpty {
+                    return results.channels.prefix(limit).map { channel in
+                        YouTubeChannel(
+                            channelId: channel.channelId ?? channel.handle ?? channel.title,
+                            title: channel.title,
+                            thumbnailURL: channel.thumbnailURL
+                        )
+                    }
+                }
+            } catch {
+                lastError = error
+                continue
+            }
         }
-        searchError = "Artist search failed"
+        searchError = lastError.map { "Artist search failed: \($0.localizedDescription)" } ?? "Artist search failed"
         return []
     }
 
@@ -181,6 +242,7 @@ final class YouTubeKitService: ObservableObject {
         searchError = nil
         try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        var lastError: Error?
         for client in clients {
             do {
                 let json = try await self.client.search(
@@ -188,17 +250,70 @@ final class YouTubeKitService: ObservableObject {
                     params: YouTubeSearchFilter.playlist.rawValue,
                     client: client
                 )
-                return LibraryBrowseParser.parsePlaylists(from: json).prefix(limit).map { playlist in
-                    YouTubePlaylist(
-                        playlistId: playlist.browseId,
-                        title: playlist.title,
-                        thumbnailURL: playlist.thumbnailUrl,
-                        videoCountText: playlist.songCount.map { "\($0) songs" }
-                    )
+                let playlists = LibraryBrowseParser.parsePlaylists(from: json)
+                if !playlists.isEmpty {
+                    return playlists.prefix(limit).map { playlist in
+                        YouTubePlaylist(
+                            playlistId: playlist.browseId,
+                            title: playlist.title,
+                            thumbnailURL: playlist.thumbnailUrl,
+                            videoCountText: playlist.songCount.map { "\($0) songs" }
+                        )
+                    }
                 }
-            } catch { continue }
+                let results = YouTubeFeedParser.searchResults(in: json)
+                if !results.playlists.isEmpty {
+                    return results.playlists.prefix(limit).map { playlist in
+                        YouTubePlaylist(
+                            playlistId: playlist.playlistId,
+                            title: playlist.title,
+                            thumbnailURL: playlist.thumbnailURL,
+                            videoCountText: playlist.videoCountText
+                        )
+                    }
+                }
+            } catch {
+                lastError = error
+                continue
+            }
         }
-        searchError = "Playlist search failed"
+        searchError = lastError.map { "Playlist search failed: \($0.localizedDescription)" } ?? "Playlist search failed"
+        return []
+    }
+
+    func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
+        searchError = nil
+        try? await client.ensureVisitorData()
+        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+        var lastError: Error?
+        for client in clients {
+            do {
+                let json = try await self.client.search(query: term, client: client)
+                let albums = LibraryBrowseParser.parseAlbums(from: json)
+                if !albums.isEmpty { return Array(albums.prefix(limit)) }
+                // Albums in search results appear as lockupViewModel with contentType
+                // containing ALBUM — handled by YouTubeFeedParser.playlists() which
+                // also collects lockupViewModel entries.
+                let results = YouTubeFeedParser.searchResults(in: json)
+                if !results.playlists.isEmpty {
+                    return results.playlists.prefix(limit).map { playlist in
+                        ParsedAlbum(
+                            browseId: playlist.playlistId,
+                            title: playlist.title,
+                            artist: playlist.channelTitle,
+                            thumbnailUrl: playlist.thumbnailURL,
+                            songCount: 0,
+                            duration: 0,
+                            playlistId: playlist.playlistId
+                        )
+                    }
+                }
+            } catch {
+                lastError = error
+                continue
+            }
+        }
+        searchError = lastError.map { "Album search failed: \($0.localizedDescription)" } ?? "Album search failed"
         return []
     }
 
@@ -278,21 +393,6 @@ final class YouTubeKitService: ObservableObject {
     }
 
     // MARK: - Albums and artist pages
-
-    func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
-        searchError = nil
-        try? await client.ensureVisitorData()
-        let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
-        for client in clients {
-            do {
-                let json = try await self.client.search(query: term, client: client)
-                let albums = LibraryBrowseParser.parseAlbums(from: json).prefix(limit)
-                if !albums.isEmpty { return Array(albums) }
-            } catch { continue }
-        }
-        searchError = "Album search failed"
-        return []
-    }
 
     func fetchAlbumTracks(browseID: String, limit: Int = 100) async -> (title: String?, artist: String?, tracks: [YouTubeTrack]) {
         do {
