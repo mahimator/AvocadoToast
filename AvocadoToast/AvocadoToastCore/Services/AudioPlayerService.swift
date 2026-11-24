@@ -162,7 +162,7 @@ final class AudioPlayerService: ObservableObject {
                     if itemDuration.isFinite && itemDuration > 0 { self.duration = itemDuration }
                     // Start only after AVPlayer confirms that the item is playable.
                     self.remotePlayer.play()
-                    self.isPlaying = self.remotePlayer.timeControlStatus == .playing || self.remotePlayer.timeControlStatus == .waitingToPlay
+                    self.isPlaying = self.remotePlayer.timeControlStatus == .playing
                     self.errorMessage = nil
                     self.updateNowPlayingInfo()
                 case .failed:
