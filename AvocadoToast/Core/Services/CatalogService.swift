@@ -182,6 +182,10 @@ final class CatalogService: ObservableObject {
             guard homeRequestID == requestID else { return }
 
             let shelves = YouTubeFeedParser.shelves(in: json)
+            DiagnosticLogger.shared.write("HOME shelves found: \(shelves.count)")
+            for shelf in shelves.prefix(10) {
+                DiagnosticLogger.shared.write("HOME shelf title='\(shelf.title ?? "nil")' videos=\(shelf.videos.count) playlists=\(shelf.playlists.count)")
+            }
             let excludedShelfTerms = ["shorts", "podcast", "news", "gaming", "kids", "live"]
             let preferredShelfTerms = [
                 "mix", "quick picks", "recommended", "for you", "listen again",
@@ -199,6 +203,7 @@ final class CatalogService: ObservableObject {
             let sourceShelves = preferredShelves.isEmpty ? filteredShelves : preferredShelves
 
             var candidates: [YouTubeTrack] = []
+            DiagnosticLogger.shared.write("HOME sourceShelves count: \(sourceShelves.count)")
             for shelf in sourceShelves {
                 for video in shelf.videos where !video.isShort && !video.isLive {
                     let title = video.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -212,6 +217,7 @@ final class CatalogService: ObservableObject {
                     ))
                 }
             }
+            DiagnosticLogger.shared.write("HOME candidates from shelves: \(candidates.count)")
 
             // Some Home responses expose video renderers without shelf wrappers.
             // Keep that as a fallback, still sourced from the actual Home feed.
