@@ -38,7 +38,9 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
             guard info.name != "Guest", !info.name.isEmpty else {
                 keychainDelete()
                 await YouTubeKitService.shared.useGuestSession()
-                statusMessage = "YouTube rejected the session. Please sign in again."
+                isSignedIn = false
+                account = nil
+                statusMessage = "YouTube did not accept this session. Please sign in again."
                 return false
             }
             account = info
@@ -47,11 +49,13 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
             DiagnosticLogger.shared.logSession(signedIn: true, accountName: info.name)
             return true
         } catch {
-            keychainDelete()
-            await YouTubeKitService.shared.useGuestSession()
-            DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
-            statusMessage = "Sign-in couldn't be verified: \(error.localizedDescription)"
-            return false
+            // Keep the newly harvested cookies. Account verification can fail
+            // temporarily because of network or InnerTube availability.
+            isSignedIn = true
+            account = nil
+            DiagnosticLogger.shared.logSession(signedIn: true, accountName: nil)
+            statusMessage = "Session saved. Account verification is temporarily unavailable: \(error.localizedDescription)"
+            return true
         }
     }
 
@@ -62,6 +66,8 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
             DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
             return
         }
+        isWorking = true
+        defer { isWorking = false }
         await YouTubeKitService.shared.loadSavedSession()
         do {
             let info = try await YouTubeKitService.shared.fetchAccountInfo()
@@ -78,12 +84,13 @@ final class YouTubeAccountSession: ObservableObject, AuthStateProvider {
                 statusMessage = "Saved Google session expired. Sign in again."
             }
         } catch {
-            keychainDelete()
+            // Do not destroy a persisted session because a transient request
+            // failed. Keep the credentials loaded so the next API request can
+            // retry without sending the user through Google sign-in again.
             account = nil
-            isSignedIn = false
-            await YouTubeKitService.shared.useGuestSession()
-            DiagnosticLogger.shared.logSession(signedIn: false, accountName: nil)
-            statusMessage = "Couldn't verify saved Google session. Sign in again."
+            isSignedIn = loadSavedAuth() != nil
+            DiagnosticLogger.shared.logSession(signedIn: isSignedIn, accountName: nil)
+            statusMessage = "Saved session couldn't be checked right now. We'll keep it and retry automatically."
         }
     }
 
