@@ -43,6 +43,7 @@ final class YouTubeKitService: ObservableObject {
     /// Returns the real YouTube Music Home response as a discovery source.
     /// Presentation and shelf selection stay owned by Avocado Toast.
     func fetchMusicHome() async throws -> [String: Any] {
+        try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
         var lastError: Error?
         for client in clients {
@@ -62,6 +63,10 @@ final class YouTubeKitService: ObservableObject {
         isSearching = true
         searchError = nil
         defer { isSearching = false }
+
+        // Ensure visitor data is set so guest-mode search includes
+        // an X-Goog-Visitor-Id header.
+        try? await client.ensureVisitorData()
 
         // Try multiple YouTube clients — Music search may be restricted on some
         // clients but work on others. Guest mode especially needs a fallback.
@@ -150,6 +155,7 @@ final class YouTubeKitService: ObservableObject {
 
     func searchArtists(term: String, limit: Int = 20) async -> [YouTubeChannel] {
         searchError = nil
+        try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
         for client in clients {
             do {
@@ -173,6 +179,7 @@ final class YouTubeKitService: ObservableObject {
 
     func searchPlaylists(term: String, limit: Int = 20) async -> [YouTubePlaylist] {
         searchError = nil
+        try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
         for client in clients {
             do {
@@ -205,6 +212,8 @@ final class YouTubeKitService: ObservableObject {
         var seenContinuations = Set<String>()
         var pageCount = 0
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
+
+        try? await client.ensureVisitorData()
 
         do {
             repeat {
@@ -272,6 +281,7 @@ final class YouTubeKitService: ObservableObject {
 
     func searchAlbums(term: String, limit: Int = 20) async -> [ParsedAlbum] {
         searchError = nil
+        try? await client.ensureVisitorData()
         let clients: [YouTubeClient] = [config.defaultClient, .web, .iOS]
         for client in clients {
             do {
