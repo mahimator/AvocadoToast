@@ -295,7 +295,8 @@ final class CatalogService: ObservableObject {
                             DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] keys: \(tab.keys.sorted())")
                             if let tabContent = tab["tabRenderer"] as? [String: Any] {
                                 DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] tabRenderer keys: \(tabContent.keys.sorted())")
-                                if let sectionList = tabContent["sectionListRenderer"] as? [String: Any] {
+                                if let sectionContent = tabContent["content"] as? [String: Any],
+                                   let sectionList = sectionContent["sectionListRenderer"] as? [String: Any] {
                                     DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] sectionListRenderer keys: \(sectionList.keys.sorted())")
                                     if let sections = sectionList["contents"] as? [[String: Any]] {
                                         DiagnosticLogger.shared.write("HOME tab[\(tabIdx)] sections: \(sections.count)")
