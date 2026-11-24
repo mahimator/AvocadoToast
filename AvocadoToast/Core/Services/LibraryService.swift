@@ -23,6 +23,8 @@ final class LibraryService: ObservableObject {
     @Published private(set) var savedArtists: [ArtistModel] = []
     @Published private(set) var savedPlaylists: [PlaylistModel] = []
     @Published private(set) var recentlyPlayed: [RecentTrackModel] = []
+    @Published private(set) var isSyncingYouTubeLibrary = false
+    @Published var youtubeLibraryError: String?
 
     init(context: ModelContext? = nil) {
         if let context {
@@ -302,6 +304,108 @@ final class LibraryService: ObservableObject {
         playlist.updatedAt = Date()
         save()
         refresh()
+    }
+
+    // MARK: - Remote YouTube Music library
+
+    /// Imports the signed-in account's library into the local SwiftData cache.
+    /// Existing local music and playlists are never removed by a remote refresh.
+    func syncYouTubeLibrary() async {
+        guard YouTubeAccountSession.shared.isSignedIn, !isSyncingYouTubeLibrary else { return }
+        isSyncingYouTubeLibrary = true
+        youtubeLibraryError = nil
+        defer { isSyncingYouTubeLibrary = false }
+
+        do {
+            let snapshot = try await YouTubeKitService.shared.fetchLibrarySnapshot()
+
+            for item in snapshot.tracks where !item.videoId.isEmpty {
+                if let existing = savedTracks.first(where: { $0.provider == "youtube" && $0.providerID == item.videoId }) {
+                    existing.title = item.title
+                    existing.artistName = item.artist
+                    existing.artworkURL = item.thumbnailURL
+                    existing.duration = item.duration
+                    existing.isPlayable = true
+                } else {
+                    context.insert(TrackModel(
+                        id: item.videoId,
+                        provider: "youtube",
+                        providerID: item.videoId,
+                        title: item.title,
+                        artistName: item.artist,
+                        artworkURL: item.thumbnailURL,
+                        duration: item.duration,
+                        isVideo: true,
+                        isPlayable: true,
+                        addedAt: Date()
+                    ))
+                }
+            }
+
+            for item in snapshot.albums where !item.browseId.isEmpty {
+                if let existing = savedAlbums.first(where: { $0.provider == "youtube" && $0.providerID == item.browseId }) {
+                    existing.title = item.title
+                    existing.artistName = item.artist
+                    existing.artworkURL = item.thumbnailUrl
+                    existing.trackCount = item.songCount
+                } else {
+                    context.insert(AlbumModel(
+                        id: "youtube|\(item.browseId)",
+                        provider: "youtube",
+                        providerID: item.browseId,
+                        title: item.title,
+                        artistName: item.artist,
+                        artworkURL: item.thumbnailUrl,
+                        trackCount: item.songCount,
+                        albumType: "album"
+                    ))
+                }
+            }
+
+            for item in snapshot.artists where !item.channelId.isEmpty {
+                if let existing = savedArtists.first(where: { $0.provider == "youtube" && $0.providerID == item.channelId }) {
+                    existing.name = item.title
+                    existing.artworkURL = item.thumbnailURL
+                } else {
+                    context.insert(ArtistModel(
+                        id: "youtube|\(item.channelId)",
+                        provider: "youtube",
+                        providerID: item.channelId,
+                        name: item.title,
+                        artworkURL: item.thumbnailURL
+                    ))
+                }
+            }
+
+            for item in snapshot.playlists where !item.playlistId.isEmpty {
+                let countText = item.videoCountText ?? "Playlist"
+                if let existing = savedPlaylists.first(where: { $0.provider == "youtube" && $0.providerID == item.playlistId }) {
+                    existing.name = item.title
+                    existing.artworkURL = item.thumbnailURL
+                    existing.metadata["trackCount"] = countText
+                    existing.isEditable = false
+                    existing.updatedAt = Date()
+                } else {
+                    context.insert(PlaylistModel(
+                        id: "youtube|\(item.playlistId)",
+                        name: item.title,
+                        artworkURL: item.thumbnailURL,
+                        creator: "YouTube Music",
+                        provider: "youtube",
+                        providerID: item.playlistId,
+                        isEditable: false,
+                        metadata: ["trackCount": countText]
+                    ))
+                }
+            }
+
+            save()
+            refresh()
+            DiagnosticLogger.shared.write("LIBRARY sync complete tracks=\(snapshot.tracks.count) playlists=\(snapshot.playlists.count) albums=\(snapshot.albums.count) artists=\(snapshot.artists.count)")
+        } catch {
+            youtubeLibraryError = error.localizedDescription
+            DiagnosticLogger.shared.write("LIBRARY sync failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Persistence
