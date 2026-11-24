@@ -345,7 +345,7 @@ final class LibraryService: ObservableObject {
             for item in snapshot.albums where !item.browseId.isEmpty {
                 if let existing = savedAlbums.first(where: { $0.provider == "youtube" && $0.providerID == item.browseId }) {
                     existing.title = item.title
-                    existing.artistName = item.artist
+                    existing.artistName = item.artist ?? "Unknown Artist"
                     existing.artworkURL = item.thumbnailUrl
                     existing.trackCount = item.songCount
                 } else {
