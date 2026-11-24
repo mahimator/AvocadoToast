@@ -332,7 +332,7 @@ final class LibraryService: ObservableObject {
                         provider: "youtube",
                         providerID: item.videoId,
                         title: item.title,
-                        artistName: item.artist,
+                        artistName: item.artist ?? "Unknown Artist",
                         artworkURL: item.thumbnailURL,
                         duration: item.duration,
                         isVideo: true,
