@@ -26,7 +26,7 @@ struct YouTubeGoogleLoginSheet: View {
             VStack(spacing: 12) {
                 Text("Sign in to Google")
                     .font(.title2.bold())
-                Text("Sign in to YouTube Music below. Avocado Toast will use your YouTube session for your personal playlists and account library.")
+                Text("Sign in to YouTube Music below. Your Google cookies will be shared with Safari, so if you're already signed in there, it's automatic.")
                     .font(.subheadline).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).padding(.horizontal)
 
@@ -43,7 +43,16 @@ struct YouTubeGoogleLoginSheet: View {
                 .padding(.horizontal)
                 .padding(.bottom, 8)
 
-                Text("If you're already signed into Google in Safari, your account will be detected automatically.")
+                if authSession != nil {
+                    Button("I've signed in, continue") {
+                        finishSignIn()
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
+
+                Text("Passkeys, Face ID, and saved passwords in Safari are supported.")
                     .font(.caption2).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).padding(.horizontal)
             }
@@ -60,22 +69,17 @@ struct YouTubeGoogleLoginSheet: View {
         message = "Opening Google sign-in…"
 
         let url = URL(string: "https://music.youtube.com/")!
-        let callbackURLScheme = "avocadotoast"
-
+        // No callbackURLScheme — YouTube Music doesn't redirect back to our app.
+        // The user signs in, then taps "I've signed in, continue" to harvest cookies.
         authSession = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: callbackURLScheme
-        ) { callbackURL, error in
+            callbackURLScheme: nil
+        ) { _, error in
             Task { @MainActor in
                 self.isCollecting = false
-
                 if let error {
-                    self.message = nil
-                    self.harvestSession()
-                    return
+                    self.message = "Sign-in was cancelled."
                 }
-
-                self.harvestSession()
             }
         }
 
@@ -83,11 +87,17 @@ struct YouTubeGoogleLoginSheet: View {
         authSession?.start()
     }
 
-    private func harvestSession() {
+    private func finishSignIn() {
+        isCollecting = true
         message = "Harvesting session cookies…"
 
+        // Cancel the session now that the user has finished signing in
+        authSession?.cancel()
+        authSession = nil
+
         Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            // Give cookies time to be written to shared storage
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
 
             let cookies = HTTPCookieStorage.shared.cookies ?? []
             let youtubeCookies = cookies.filter { cookie in
@@ -106,11 +116,13 @@ struct YouTubeGoogleLoginSheet: View {
 
             guard !cookieDict.isEmpty, let sapisid, !sapisid.isEmpty else {
                 self.message = "Couldn't capture a complete session. Make sure you're signed in to YouTube Music, then try again."
+                self.isCollecting = false
                 return
             }
 
             let success = await YouTubeAccountSession.shared.applySession(cookies: cookieDict, sapisid: sapisid)
             self.message = YouTubeAccountSession.shared.statusMessage
+            self.isCollecting = false
             if success { self.dismiss() }
         }
     }
