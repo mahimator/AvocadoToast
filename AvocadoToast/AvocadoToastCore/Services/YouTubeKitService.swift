@@ -128,7 +128,7 @@ final class YouTubeKitService: ObservableObject {
 
     // MARK: - Search
 
-    func search(term: String, limit: Int = 25) async -> [YouTubeTrack] {
+    func search(term: String, limit: Int = 25, mediaMode: AppConfig.SearchMediaMode = .audio) async -> [YouTubeTrack] {
         isSearching = true
         searchError = nil
         defer { isSearching = false }
@@ -147,39 +147,44 @@ final class YouTubeKitService: ObservableObject {
             do {
                 let json = try await self.client.search(query: term, client: client)
 
-                // Music search returns musicResponsiveListItemRenderer rows, not
-                // ordinary videoRenderer rows. Parse Music rows first, then use the
-                // general parser as a fallback for mixed/legacy results.
-                let songs = LibraryBrowseParser.parseSongs(from: json)
-                if !songs.isEmpty {
-                    var seen = Set<String>()
-                    let result = songs.filter { seen.insert($0.videoId).inserted }
-                        .prefix(limit).map { song in
+                if mediaMode == .audio {
+                    // Audio mode accepts only YouTube Music song renderers.
+                    // Generic videoRenderer results are deliberately excluded.
+                    let songs = LibraryBrowseParser.parseSongs(from: json)
+                    if !songs.isEmpty {
+                        var seen = Set<String>()
+                        let result = songs.filter {
+                            !$0.videoId.isEmpty && seen.insert($0.videoId).inserted
+                        }.prefix(limit).map { song in
                             YouTubeTrack(
                                 videoId: song.videoId,
                                 title: song.title,
                                 artist: song.artists.isEmpty ? "Unknown Artist" : song.artists.joined(separator: ", "),
                                 duration: Double(song.duration),
-                                thumbnailURL: song.thumbnailUrl
+                                thumbnailURL: song.thumbnailUrl,
+                                isVideo: false
                             )
                         }
-                    DiagnosticLogger.shared.logSearch(term: term, type: "songs", client: client.clientName, resultCount: result.count, error: nil)
-                    return Array(result)
-                }
-
-                let videos = YouTubeFeedParser.searchResults(in: json).videos
-                if !videos.isEmpty {
-                    let result = videos.prefix(limit).map { video in
-                        YouTubeTrack(
-                            videoId: video.videoId,
-                            title: video.title,
-                            artist: video.channelTitle ?? "Unknown Artist",
-                            duration: video.durationSeconds.map { Double($0) } ?? 0,
-                            thumbnailURL: video.thumbnailURL
-                        )
+                        DiagnosticLogger.shared.logSearch(term: term, type: "audio", client: client.clientName, resultCount: result.count, error: nil)
+                        return Array(result)
                     }
-                    DiagnosticLogger.shared.logSearch(term: term, type: "videos", client: client.clientName, resultCount: result.count, error: nil)
-                    return result
+                } else {
+                    // Video mode uses the general YouTube search result parser.
+                    let videos = YouTubeFeedParser.searchResults(in: json).videos
+                    if !videos.isEmpty {
+                        let result = videos.prefix(limit).map { video in
+                            YouTubeTrack(
+                                videoId: video.videoId,
+                                title: video.title,
+                                artist: video.channelTitle ?? "Unknown Channel",
+                                duration: video.durationSeconds.map { Double($0) } ?? 0,
+                                thumbnailURL: video.thumbnailURL,
+                                isVideo: true
+                            )
+                        }
+                        DiagnosticLogger.shared.logSearch(term: term, type: "video", client: client.clientName, resultCount: result.count, error: nil)
+                        return result
+                    }
                 }
             } catch {
                 lastError = error
@@ -191,9 +196,11 @@ final class YouTubeKitService: ObservableObject {
         if let lastError {
             searchError = "Search failed: \(lastError.localizedDescription)"
         } else {
-            searchError = "No results found. \(YouTubeAccountSession.shared.isSignedIn ? "" : "Sign in to YouTube Music to search.")"
+            searchError = mediaMode == .audio
+                ? "No audio results found. Try Video mode to search music videos and other video results."
+                : "No video results found."
         }
-        DiagnosticLogger.shared.logSearch(term: term, type: "songs", client: "all_failed", resultCount: 0, error: searchError)
+        DiagnosticLogger.shared.logSearch(term: term, type: mediaMode.rawValue.lowercased(), client: "all_failed", resultCount: 0, error: searchError)
         return []
     }
 
@@ -624,10 +631,11 @@ struct YouTubeTrack: Identifiable, Equatable, Hashable {
     let thumbnailURL: String?
     var streamURL: String?
     var localFileURL: String?
+    var isVideo: Bool
 
     init(videoId: String, title: String, artist: String, duration: Double = 0,
          thumbnailURL: String? = nil, streamURL: String? = nil,
-         localFileURL: String? = nil, provider: String = "youtube") {
+         localFileURL: String? = nil, provider: String = "youtube", isVideo: Bool = false) {
         self.id = videoId
         self.videoId = videoId
         self.provider = provider
@@ -637,6 +645,7 @@ struct YouTubeTrack: Identifiable, Equatable, Hashable {
         self.thumbnailURL = thumbnailURL
         self.streamURL = streamURL
         self.localFileURL = localFileURL
+        self.isVideo = isVideo
     }
 
     static func == (lhs: YouTubeTrack, rhs: YouTubeTrack) -> Bool {
