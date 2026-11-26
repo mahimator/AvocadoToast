@@ -16,7 +16,25 @@ final class AudioPlayerService: ObservableObject {
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
+    private let equalizer = AVAudioUnitEQ(numberOfBands: 10)
     private let remotePlayer = AVPlayer()
+
+    static let equalizerFrequencies: [Float] = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+    @Published var equalizerEnabled: Bool = UserDefaults.standard.object(forKey: "AvocadoToast.eq.enabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(equalizerEnabled, forKey: "AvocadoToast.eq.enabled")
+            applyEqualizerSettings()
+        }
+    }
+    @Published var equalizerGains: [Float] = {
+        let stored = UserDefaults.standard.array(forKey: "AvocadoToast.eq.gains") as? [NSNumber]
+        return stored?.map(\.floatValue) ?? Array(repeating: 0, count: 10)
+    }() {
+        didSet {
+            UserDefaults.standard.set(equalizerGains.map(NSNumber.init(value:)), forKey: "AvocadoToast.eq.gains")
+            applyEqualizerSettings()
+        }
+    }
 
     @Published var isPlaying = false
     @Published var currentTrack: YouTubeTrack?
@@ -39,6 +57,29 @@ final class AudioPlayerService: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
     private var shouldResumeAfterInterruption = false
+
+    var videoPlayer: AVPlayer { remotePlayer }
+    var isUsingRemotePlayer: Bool { isRemotePlayback }
+
+    func setEqualizerGain(_ gain: Float, at index: Int) {
+        guard equalizerGains.indices.contains(index) else { return }
+        var updated = equalizerGains
+        updated[index] = min(12, max(-12, gain))
+        equalizerGains = updated
+    }
+
+    private func applyEqualizerSettings() {
+        guard equalizer.bands.count == Self.equalizerFrequencies.count else { return }
+        for index in equalizer.bands.indices {
+            let band = equalizer.bands[index]
+            band.filterType = .parametric
+            band.frequency = Self.equalizerFrequencies[index]
+            band.bandwidth = 1.0
+            band.gain = equalizerGains.indices.contains(index) ? equalizerGains[index] : 0
+            band.bypass = !equalizerEnabled
+        }
+        equalizer.bypass = !equalizerEnabled
+    }
 
     private init() {
         setupEngine()
@@ -63,7 +104,10 @@ final class AudioPlayerService: ObservableObject {
 
     private func setupEngine() {
         engine.attach(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
+        engine.attach(equalizer)
+        engine.connect(playerNode, to: equalizer, format: nil)
+        engine.connect(equalizer, to: engine.mainMixerNode, format: nil)
+        applyEqualizerSettings()
         do {
             try engine.start()
         } catch {
