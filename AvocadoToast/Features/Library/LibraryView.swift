@@ -98,11 +98,15 @@ struct LibraryView: View {
                 library.refresh()
                 if accountSession.isSignedIn {
                     await library.syncYouTubeLibrary()
+                    CatalogService.shared.refreshSavedTracks()
                 }
             }
             .onChange(of: accountSession.isSignedIn) { _, signedIn in
                 if signedIn {
-                    Task { await library.syncYouTubeLibrary() }
+                    Task {
+                        await library.syncYouTubeLibrary()
+                        CatalogService.shared.refreshSavedTracks()
+                    }
                 }
             }
         }
@@ -208,6 +212,7 @@ struct LibraryView: View {
             do {
                 let result = try await localAudioManager.refreshLinkedFolder()
                 library.importFolderScan(result)
+                CatalogService.shared.refreshSavedTracks()
                 let summary = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
                 importError = result.failures.isEmpty
                     ? summary
@@ -257,6 +262,7 @@ struct LibraryView: View {
         }
 
         library.saveTracks(importedModels)
+        CatalogService.shared.refreshSavedTracks()
         let importedCount = importedModels.count
         if failedImports.isEmpty {
             importError = "Imported \(importedCount) audio file\(importedCount == 1 ? "" : "s") into your library."
