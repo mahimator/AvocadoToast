@@ -138,7 +138,7 @@ final class LocalAudioManagerTests: XCTestCase {
             _ = try await manager.importAudio(from: url)
             XCTFail("Malformed audio should be rejected")
         } catch {
-            XCTAssertTrue(error is AVError || error is LocalAudioImportError || error is NSError)
+            XCTAssertFalse(error.localizedDescription.isEmpty)
         }
     }
 
