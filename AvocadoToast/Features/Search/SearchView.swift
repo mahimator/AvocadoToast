@@ -31,9 +31,18 @@ struct SearchView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 10)
 
+                Picker("Search media", selection: $config.searchMediaMode) {
+                    ForEach(AppConfig.SearchMediaMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+
                 categoryPicker
                     .padding(.horizontal, 18)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
 
                 Group {
                     if CatalogService.shared.isSearching {
@@ -72,6 +81,9 @@ struct SearchView: View {
             }
             .onChange(of: selectedCategory) { _, category in
                 if !query.isEmpty { viewModel.searchNow(query, type: category) }
+            }
+            .onChange(of: config.searchMediaMode) { _, _ in
+                if !query.isEmpty { viewModel.searchNow(query, type: selectedCategory) }
             }
         }
     }
