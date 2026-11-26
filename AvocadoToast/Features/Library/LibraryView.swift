@@ -626,7 +626,8 @@ private struct LocalPlaylistDetailView: View {
                 duration: model.duration ?? 0,
                 thumbnailURL: model.artworkURL,
                 localFileURL: model.provider == "local" ? model.providerID : nil,
-                provider: model.provider
+                provider: model.provider,
+                isVideo: model.isVideo
             )
         }
     }
