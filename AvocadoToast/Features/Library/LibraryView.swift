@@ -316,11 +316,8 @@ struct LibraryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: selectedFilter.emptyIcon)
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(ColorTokens.accentPrimary)
-                .frame(width: 84, height: 84)
-                .background(config.enableGlassEffects ? ColorTokens.surfaceGlass : ColorTokens.backgroundSecondary, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            AvocadoMascotView(mood: selectedFilter == .songs ? .emptyToaster : .importing)
+                .padding(.bottom, 2)
             Text(selectedFilter.emptyTitle)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(ColorTokens.textPrimary)
