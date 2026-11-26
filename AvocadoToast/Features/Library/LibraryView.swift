@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @StateObject private var library = LibraryService.shared
     @ObservedObject private var accountSession = YouTubeAccountSession.shared
+    @ObservedObject private var localAudioManager = LocalAudioManager.shared
     @ObservedObject private var config = AppConfig.shared
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
@@ -76,7 +77,7 @@ struct LibraryView: View {
                 case .success(let urls):
                     guard let folder = urls.first else { return }
                     do {
-                        try LocalAudioManager.shared.linkMusicFolder(folder)
+                        try localAudioManager.linkMusicFolder(folder)
                         refreshLinkedFolder()
                     } catch {
                         importError = error.localizedDescription
@@ -152,7 +153,7 @@ struct LibraryView: View {
 
     @ViewBuilder
     private var linkedFolderBar: some View {
-        if let folderName = LocalAudioManager.shared.linkedFolderName {
+        if let folderName = localAudioManager.linkedFolderName {
             HStack(spacing: 10) {
                 Image(systemName: "folder.fill")
                     .foregroundStyle(ColorTokens.accentPrimary)
@@ -183,7 +184,7 @@ struct LibraryView: View {
                         showingFolderImporter = true
                     }
                     Button("Unlink folder", systemImage: "link.badge.minus", role: .destructive) {
-                        LocalAudioManager.shared.unlinkMusicFolder()
+                        localAudioManager.unlinkMusicFolder()
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -205,7 +206,7 @@ struct LibraryView: View {
         Task { @MainActor in
             defer { isRefreshingLinkedFolder = false }
             do {
-                let result = try await LocalAudioManager.shared.refreshLinkedFolder()
+                let result = try await localAudioManager.refreshLinkedFolder()
                 library.importFolderScan(result)
                 importError = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
             } catch {
