@@ -16,6 +16,7 @@ struct NowPlayingView: View {
     @State private var ambientColor: Color = ColorTokens.accentPrimary.opacity(0.22)
     @State private var showingQueue = false
     @State private var showingLyrics = false
+    @State private var showingEqualizer = false
     @ObservedObject private var catalog = CatalogService.shared
     @ObservedObject private var config = AppConfig.shared
 
@@ -81,6 +82,11 @@ struct NowPlayingView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+        }
+        .sheet(isPresented: $showingEqualizer) {
+            EqualizerSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -244,6 +250,13 @@ struct NowPlayingView: View {
                     .frame(width: 52, height: 42)
             }
             .accessibilityLabel("Open queue")
+            Spacer()
+            Button { showingEqualizer = true } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 52, height: 42)
+            }
+            .accessibilityLabel("Open equalizer")
             Spacer()
             AirPlayRoutePicker()
                 .frame(width: 52, height: 42)
@@ -491,6 +504,61 @@ private struct LyricsSheet: View {
             isLoading = true
             segments = track.provider == "youtube" ? await YouTubeKitService.shared.fetchLyrics(videoId: track.videoId) : []
             isLoading = false
+        }
+    }
+}
+
+
+private struct EqualizerSheet: View {
+    @ObservedObject private var player = AudioPlayerService.shared
+
+    private let labels = ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Equalizer enabled", isOn: $player.equalizerEnabled)
+                    Button("Reset to flat") {
+                        player.equalizerGains = Array(repeating: 0, count: 10)
+                    }
+                }
+                Section("10-band equalizer") {
+                    ForEach(labels.indices, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text("\(labels[index]) Hz")
+                                    .font(.caption.monospacedDigit())
+                                Spacer()
+                                Text("\(player.equalizerGains[index], specifier: "%.1f") dB")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(player.equalizerGains[index]) },
+                                    set: { player.setEqualizerGain(Float($0), at: index) }
+                                ),
+                                in: -12...12
+                            )
+                            .disabled(!player.equalizerEnabled)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                Section {
+                    Label(
+                        player.isUsingRemotePlayer
+                            ? "This EQ currently processes imported and local audio. Online streams use the native streaming player and are not routed through this EQ yet."
+                            : "EQ is active on the local audio engine.",
+                        systemImage: "info.circle"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Equalizer")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
