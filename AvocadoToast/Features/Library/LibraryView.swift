@@ -208,7 +208,10 @@ struct LibraryView: View {
             do {
                 let result = try await localAudioManager.refreshLinkedFolder()
                 library.importFolderScan(result)
-                importError = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
+                let summary = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
+                importError = result.failures.isEmpty
+                    ? summary
+                    : summary + "\n\nSkipped \(result.failures.count) file(s):\n" + result.failures.prefix(8).joined(separator: "\n")
             } catch {
                 importError = error.localizedDescription
             }
