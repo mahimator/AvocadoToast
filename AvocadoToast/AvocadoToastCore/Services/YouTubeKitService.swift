@@ -207,7 +207,7 @@ final class YouTubeKitService: ObservableObject {
     // MARK: - Stream resolution
 
     /// Resolves a playable audio stream URL for a YouTube video ID.
-    func resolveStream(videoId: String) async -> String? {
+    func resolveStream(videoId: String, isVideo: Bool = false) async -> String? {
         searchError = nil
 
         func usableURL(_ value: String?) -> String? {
@@ -220,26 +220,31 @@ final class YouTubeKitService: ObservableObject {
 
         func isAACCompatible(_ mimeType: String?) -> Bool {
             guard let mime = mimeType?.lowercased() else { return false }
-            return mime.contains("mp4a") || mime.contains("aac") || mime.contains("mp4")
+            return mime.contains("mp4a") || mime.contains("aac")
+        }
+
+        func isMP4Video(_ mimeType: String?) -> Bool {
+            guard let mime = mimeType?.lowercased() else { return false }
+            return mime.contains("video/mp4")
         }
 
         // Strategy 1: Direct iOS client player response — gives iPhone-compatible
         // URLs with AAC/MP4A formats that AVPlayer can play natively.
         do {
-            let response = try await client.player(videoId: videoId, client: .iOS)
+            let response = try await client.player(videoId: videoId, client: isVideo ? .web : .iOS)
             if let streamingData = response["streamingData"] as? [String: Any] {
                 let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
                     + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
-                // AAC-compatible formats only — WebM/Opus won't play in AVPlayer
                 for format in formats {
-                    if isAACCompatible(format["mimeType"] as? String),
-                       let url = usableURL(format["url"] as? String) {
-                        DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: true, error: nil)
+                    let mime = format["mimeType"] as? String
+                    let compatible = isVideo ? isMP4Video(mime) : isAACCompatible(mime)
+                    if compatible, let url = usableURL(format["url"] as? String) {
+                        DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: isVideo ? "web_player_mp4" : "ios_player_aac", success: true, error: nil)
                         return url
                     }
                 }
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: "No directly usable audio URL in iOS player response")
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: "No directly usable \(isVideo ? "video" : "audio") URL in player response")
         } catch {
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: error.localizedDescription)
         }
@@ -250,7 +255,7 @@ final class YouTubeKitService: ObservableObject {
             options: StreamResolveOptions(
                 forDownload: false,
                 audioQuality: .high,
-                videoQuality: .auto
+                videoQuality: isVideo ? .high : .auto
             )
         )
         do {
@@ -260,12 +265,12 @@ final class YouTubeKitService: ObservableObject {
                 providers: .live
             )
             if let mimeType = result.mimeType as? String,
-               isAACCompatible(mimeType),
+               (isVideo ? isMP4Video(mimeType) : isAACCompatible(mimeType)),
                let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: true, error: nil)
                 return url
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "No AAC-compatible stream URL from fallback provider")
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "No AVPlayer-compatible \(isVideo ? "MP4 video" : "AAC audio") URL from fallback provider")
         } catch {
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: error.localizedDescription)
         }
@@ -280,12 +285,12 @@ final class YouTubeKitService: ObservableObject {
                 providers: .live
             )
             if let mimeType = result.mimeType as? String,
-               isAACCompatible(mimeType),
+               (isVideo ? isMP4Video(mimeType) : isAACCompatible(mimeType)),
                let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: true, error: nil)
                 return url
             }
-            searchError = "YouTube returned a stream response without a usable audio URL."
+            searchError = "YouTube returned a stream response without a usable \(isVideo ? "video" : "audio") URL."
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: false, error: searchError)
         } catch {
             searchError = "Stream resolution failed: \(error.localizedDescription)"
