@@ -408,7 +408,7 @@ final class LibraryService: ObservableObject {
                         artistName: item.artist,
                         artworkURL: item.thumbnailURL,
                         duration: item.duration,
-                        isVideo: true,
+                        isVideo: false,
                         isPlayable: true,
                         addedAt: Date()
                     ))
