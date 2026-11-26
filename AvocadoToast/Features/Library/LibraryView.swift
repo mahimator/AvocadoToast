@@ -96,6 +96,9 @@ struct LibraryView: View {
             }
             .task {
                 library.refresh()
+                if localAudioManager.linkedFolderName != nil {
+                    refreshLinkedFolder(showResult: false)
+                }
                 if accountSession.isSignedIn {
                     await library.syncYouTubeLibrary()
                     CatalogService.shared.refreshSavedTracks()
@@ -204,7 +207,7 @@ struct LibraryView: View {
         }
     }
 
-    private func refreshLinkedFolder() {
+    private func refreshLinkedFolder(showResult: Bool = true) {
         guard !isRefreshingLinkedFolder else { return }
         isRefreshingLinkedFolder = true
         Task { @MainActor in
@@ -214,9 +217,11 @@ struct LibraryView: View {
                 library.importFolderScan(result)
                 CatalogService.shared.refreshSavedTracks()
                 let summary = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
-                importError = result.failures.isEmpty
-                    ? summary
-                    : summary + "\n\nSkipped \(result.failures.count) file(s):\n" + result.failures.prefix(8).joined(separator: "\n")
+                if showResult {
+                    importError = result.failures.isEmpty
+                        ? summary
+                        : summary + "\n\nSkipped \(result.failures.count) file(s):\n" + result.failures.prefix(8).joined(separator: "\n")
+                }
             } catch {
                 importError = error.localizedDescription
             }
