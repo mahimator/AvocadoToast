@@ -56,7 +56,17 @@ struct SearchView: View {
                             recentSearchesView
                         }
                     } else if !hasResults {
-                        ContentUnavailableView("No matches this time", systemImage: "music.note.magnifyingglass", description: Text("Try a different name or category."))
+                        VStack(spacing: 8) {
+                            AvocadoMascotView(mood: .searching)
+                            Text("Nothing in the search basket")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(ColorTokens.textPrimary)
+                            Text("Try a different name or switch between Audio and Video.")
+                                .font(.subheadline)
+                                .foregroundStyle(ColorTokens.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 280)
+                        }
                     } else {
                         searchResultsView
                     }
@@ -152,7 +162,15 @@ struct SearchView: View {
     }
 
     private var searchPrompt: some View {
-        ContentUnavailableView("Find your next favorite", systemImage: "magnifyingglass", description: Text("Search for a song, artist, album or playlist."))
+        VStack(spacing: 8) {
+            AvocadoMascotView(mood: .searching)
+            Text("Find your next favorite")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(ColorTokens.textPrimary)
+            Text("Search for a song, artist, album or playlist.")
+                .font(.subheadline)
+                .foregroundStyle(ColorTokens.textSecondary)
+        }
     }
 
     private var recentSearches: [String] { viewModel.recentSearches }
