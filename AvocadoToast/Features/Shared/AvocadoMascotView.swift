@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AvocadoMascotView: View {
-    enum Mood {
+    enum Mood: Equatable {
         case emptyToaster
         case searching
         case playbackError
@@ -93,10 +93,10 @@ struct AvocadoMascotView: View {
     }
 
     private func drawToaster(in context: inout GraphicsContext) {
-        let shell = Path(roundedRect: CGRect(x: 137, y: 69, width: 86, height: 82), cornerRadius: 18)
+        let shell = RoundedRectangle(cornerRadius: 18).path(in: CGRect(x: 137, y: 69, width: 86, height: 82))
         context.fill(shell, with: .color(toaster))
         context.stroke(shell, with: .color(ink.opacity(0.35)), lineWidth: 2)
-        let slot = Path(roundedRect: CGRect(x: 151, y: 61, width: 58, height: 13), cornerRadius: 6)
+        let slot = RoundedRectangle(cornerRadius: 6).path(in: CGRect(x: 151, y: 61, width: 58, height: 13))
         context.fill(slot, with: .color(ink.opacity(0.65)))
         context.fill(Path(ellipseIn: CGRect(x: 207, y: 91, width: 8, height: 8)), with: .color(Color(red: 0.88, green: 0.52, blue: 0.24)))
         for x in [155.0, 172.0, 189.0, 206.0] {
@@ -165,9 +165,9 @@ struct AvocadoMascotView: View {
     }
 
     private func drawFolder(in context: inout GraphicsContext) {
-        let tab = Path(roundedRect: CGRect(x: 137, y: 64, width: 44, height: 19), cornerRadius: 7)
+        let tab = RoundedRectangle(cornerRadius: 7).path(in: CGRect(x: 137, y: 64, width: 44, height: 19))
         context.fill(tab, with: .color(Color(red: 0.83, green: 0.62, blue: 0.32)))
-        let folder = Path(roundedRect: CGRect(x: 132, y: 76, width: 91, height: 66), cornerRadius: 13)
+        let folder = RoundedRectangle(cornerRadius: 13).path(in: CGRect(x: 132, y: 76, width: 91, height: 66))
         context.fill(folder, with: .color(Color(red: 0.89, green: 0.72, blue: 0.43)))
         context.stroke(folder, with: .color(ink.opacity(0.2)), lineWidth: 2)
     }
