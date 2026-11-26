@@ -307,6 +307,78 @@ final class LibraryService: ObservableObject {
         refresh()
     }
 
+    // MARK: - Linked local music folder
+
+    func importFolderScan(_ result: FolderScanResult) {
+        refresh()
+        var modelsByID = Dictionary(uniqueKeysWithValues: savedTracks.map { ($0.id, $0) })
+
+        for item in result.files {
+            if let existing = modelsByID[item.id] {
+                existing.title = item.title
+                existing.artistName = item.artist
+                existing.duration = item.duration
+                existing.artworkURL = item.artworkURL
+                existing.providerID = item.fileURL.path
+                existing.isPlayable = true
+                existing.metadata["sourceRelativePath"] = item.relativePath
+                existing.metadata["sourceFolderPath"] = item.relativeFolderPath
+            } else {
+                let model = TrackModel(
+                    id: item.id,
+                    provider: "local",
+                    providerID: item.fileURL.path,
+                    title: item.title,
+                    artistName: item.artist,
+                    artworkURL: item.artworkURL,
+                    duration: item.duration,
+                    isVideo: false,
+                    isPlayable: true,
+                    addedAt: Date(),
+                    metadata: [
+                        "sourceRelativePath": item.relativePath,
+                        "sourceFolderPath": item.relativeFolderPath
+                    ]
+                )
+                context.insert(model)
+                modelsByID[item.id] = model
+            }
+        }
+
+        for folder in result.playlists {
+            let playlistID = "local-folder:" + folder.relativeFolderPath
+            let members = folder.trackIDs.compactMap { modelsByID[$0] }
+            if let existing = savedPlaylists.first(where: { $0.id == playlistID }) {
+                existing.name = folder.name
+                existing.trackIDs = folder.trackIDs
+                existing.tracks = members
+                existing.updatedAt = Date()
+                existing.metadata["linkedFolder"] = result.folderName
+                existing.metadata["relativeFolderPath"] = folder.relativeFolderPath
+            } else {
+                context.insert(PlaylistModel(
+                    id: playlistID,
+                    name: folder.name,
+                    creator: "Your music folder",
+                    provider: "local",
+                    providerID: folder.relativeFolderPath,
+                    trackIDs: folder.trackIDs,
+                    tracks: members,
+                    isEditable: true,
+                    metadata: [
+                        "source": "linked-folder",
+                        "linkedFolder": result.folderName,
+                        "relativeFolderPath": folder.relativeFolderPath
+                    ]
+                ))
+            }
+        }
+
+        save()
+        refresh()
+        DiagnosticLogger.shared.write("LOCAL_FOLDER sync folder='\(result.folderName)' files=\(result.files.count) playlists=\(result.playlists.count)")
+    }
+
     // MARK: - Remote YouTube Music library
 
     /// Imports the signed-in account's library into the local SwiftData cache.
