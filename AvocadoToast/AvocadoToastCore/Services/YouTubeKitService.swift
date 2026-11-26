@@ -225,7 +225,7 @@ final class YouTubeKitService: ObservableObject {
 
         func isMP4Video(_ mimeType: String?) -> Bool {
             guard let mime = mimeType?.lowercased() else { return false }
-            return mime.contains("video/mp4")
+            return mime.contains("video/mp4") && mime.contains("mp4a")
         }
 
         // Strategy 1: Direct iOS client player response — gives iPhone-compatible
