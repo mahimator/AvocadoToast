@@ -11,7 +11,7 @@ import AVFoundation
 import AudioToolbox
 import MediaToolbox
 
-private struct RemoteEQBiquad {
+nonisolated private struct RemoteEQBiquad: Sendable {
     let b0: Float
     let b1: Float
     let b2: Float
@@ -19,7 +19,7 @@ private struct RemoteEQBiquad {
     let a2: Float
 }
 
-private final class RemoteEQTapState {
+nonisolated private final class RemoteEQTapState: @unchecked Sendable {
     private let gains: [Float]
     private let enabled: Bool
     private var coefficients: [RemoteEQBiquad] = []
