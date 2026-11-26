@@ -29,10 +29,20 @@ struct NowPlayingView: View {
                         .padding(.bottom, 20)
 
                     if let track = player.currentTrack {
-                        artwork(for: track)
-                            .frame(maxWidth: 360)
-                            .padding(.horizontal, 26)
-                            .padding(.bottom, 26)
+                        Group {
+                            if track.isVideo {
+                                VideoPlayer(player: player.videoPlayer)
+                                    .aspectRatio(16 / 9, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            } else {
+                                artwork(for: track)
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                            }
+                        }
+                        .frame(maxWidth: 360)
+                        .padding(.horizontal, 26)
+                        .padding(.bottom, 26)
 
                         trackInfo(track)
                             .padding(.horizontal, 28)
