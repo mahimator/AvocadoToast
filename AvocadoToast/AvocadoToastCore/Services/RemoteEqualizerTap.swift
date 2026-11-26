@@ -171,15 +171,15 @@ enum RemoteEqualizerTap {
             process: remoteEQTapProcess
         )
 
-        var unmanagedTap: Unmanaged<MTAudioProcessingTap>?
+        var audioTap: MTAudioProcessingTap?
         let status = MTAudioProcessingTapCreate(
             kCFAllocatorDefault,
             &callbacks,
             kMTAudioProcessingTapCreationFlag_PostEffects,
-            &unmanagedTap
+            &audioTap
         )
 
-        guard status == noErr, let unmanagedTap else {
+        guard status == noErr, let audioTap else {
             retainedState.release()
             throw NSError(
                 domain: "AvocadoToast.RemoteEqualizerTap",
@@ -189,7 +189,7 @@ enum RemoteEqualizerTap {
         }
 
         let parameters = AVMutableAudioMixInputParameters(track: track)
-        parameters.audioTapProcessor = unmanagedTap.takeRetainedValue()
+        parameters.audioTapProcessor = audioTap
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = [parameters]
