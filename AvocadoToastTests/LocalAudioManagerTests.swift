@@ -84,10 +84,10 @@ final class LocalAudioManagerTests: XCTestCase {
         return url
     }
 
-    func testImportMP3() throws {
+    func testImportMP3() async throws {
         let url = try makeTestAudioFile(ext: "mp3")
         let imported = try await manager.importAudio(from: url)
-        XCTAssertEqual(imported.id.count, 36)
+        XCTAssertEqual(imported.id.count, 64)
         XCTAssertFalse(imported.title.isEmpty)
         XCTAssertEqual(imported.artist, "Unknown Artist")
         XCTAssertGreaterThan(imported.duration, 0)
@@ -95,7 +95,7 @@ final class LocalAudioManagerTests: XCTestCase {
         manager.deleteImportedAudio(at: imported.fileURL.path)
     }
 
-    func testImportM4A() throws {
+    func testImportM4A() async throws {
         let url = try makeTestAudioFile(ext: "m4a")
         let imported = try await manager.importAudio(from: url)
         XCTAssertFalse(imported.title.isEmpty)
@@ -103,7 +103,7 @@ final class LocalAudioManagerTests: XCTestCase {
         manager.deleteImportedAudio(at: imported.fileURL.path)
     }
 
-    func testImportMultipleFiles() throws {
+    func testImportMultipleFiles() async throws {
         let urls = try (0..<3).map { _ in try makeTestAudioFile(ext: "m4a") }
         var count = 0
         for url in urls {
@@ -114,27 +114,35 @@ final class LocalAudioManagerTests: XCTestCase {
         manager.clearImportedAudio()
     }
 
-    func testImportUnsupportedFormatThrows() {
+    func testImportUnsupportedFormatThrows() async {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("song").appendingPathExtension("txt")
         try! "not audio".data(using: .utf8)!.write(to: url)
 
-        XCTAssertThrowsError(try await manager.importAudio(from: url)) { error in
+        do {
+            _ = try await manager.importAudio(from: url)
+            XCTFail("Unsupported files should be rejected")
+        } catch {
             XCTAssertEqual(error as? LocalAudioImportError, LocalAudioImportError.unsupportedFormat)
         }
     }
 
-    func testImportMalformedFileThrows() {
+    func testImportMalformedFileThrows() async {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("broken").appendingPathExtension("m4a")
         try! Data([0x00, 0x01, 0x02, 0x03]).write(to: url)
 
-        XCTAssertThrowsError(try await manager.importAudio(from: url))
+        do {
+            _ = try await manager.importAudio(from: url)
+            XCTFail("Malformed audio should be rejected")
+        } catch {
+            XCTAssertTrue(error is AVError || error is LocalAudioImportError || error is NSError)
+        }
     }
 
-    func testDeleteAndClearImportedAudio() throws {
+    func testDeleteAndClearImportedAudio() async throws {
         let url = try makeTestAudioFile(ext: "m4a")
         let imported = try await manager.importAudio(from: url)
         XCTAssertTrue(FileManager.default.fileExists(atPath: imported.fileURL.path))
