@@ -98,7 +98,7 @@ final class CatalogService: ObservableObject {
 
     // MARK: - Search
 
-    func search(query: String, type: SearchType = .songs, limit: Int = 25) {
+    func search(query: String, type: SearchType = .songs, limit: Int = 25, mediaMode: AppConfig.SearchMediaMode = .audio) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         searchTask?.cancel()
         activeSearchID = nil
@@ -125,7 +125,7 @@ final class CatalogService: ObservableObject {
         searchTask = Task { [weak self, youtubeService = self.youtubeService] in
             switch type {
             case .songs:
-                let results = await youtubeService.search(term: trimmed, limit: limit)
+                let results = await youtubeService.search(term: trimmed, limit: limit, mediaMode: mediaMode)
                 guard !Task.isCancelled, let self, self.activeSearchID == requestID else { return }
                 self.searchResults = results
             case .albums:
