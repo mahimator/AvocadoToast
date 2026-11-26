@@ -59,17 +59,29 @@ struct NowPlayingView: View {
                             .padding(.top, 16)
 
                         if let error = player.errorMessage, !error.isEmpty {
-                            Text(error)
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.78))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 28)
-                                .padding(.top, 16)
+                            VStack(spacing: 4) {
+                                AvocadoMascotView(mood: .playbackError)
+                                    .frame(width: 150, height: 112)
+                                Text(error)
+                                    .font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.78))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.horizontal, 28)
+                            .padding(.top, 16)
                         }
                     } else {
-                        ContentUnavailableView("Nothing playing", systemImage: "music.note", description: Text("Find a track and let it take over from here."))
-                            .foregroundStyle(.white)
-                            .padding(.top, 80)
+                        VStack(spacing: 8) {
+                            AvocadoMascotView(mood: .emptyToaster)
+                            Text("Nothing in the toaster")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Text("Find a track and give this little guy something to listen to.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.72))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 60)
                     }
                 }
                 .frame(maxWidth: .infinity)
