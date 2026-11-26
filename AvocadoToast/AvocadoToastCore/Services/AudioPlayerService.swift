@@ -69,6 +69,10 @@ final class AudioPlayerService: ObservableObject {
         equalizerGains = updated
     }
 
+    func resetEQ() {
+        equalizerGains = Array(repeating: 0, count: equalizerGains.count)
+    }
+
     private func applyEqualizerSettings() {
         guard equalizer.bands.count == Self.equalizerFrequencies.count else { return }
         for index in equalizer.bands.indices {

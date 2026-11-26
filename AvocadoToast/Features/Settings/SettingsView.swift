@@ -10,6 +10,7 @@ import SwiftyTube
 struct SettingsView: View {
     @ObservedObject private var config = AppConfig.shared
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var player = AudioPlayerService.shared
     @State private var showingResetConfirmation = false
     @State private var resetMessage: String?
     @State private var cacheMessage: String?
@@ -63,6 +64,34 @@ struct SettingsView: View {
                         showingResetConfirmation = true
                     } label: {
                         Label("Reset local library", systemImage: "trash")
+                    }
+                }
+                Section("Audio") {
+                    Toggle("Equalizer", isOn: $player.equalizerEnabled)
+                        .foregroundStyle(player.equalizerEnabled ? .green : .primary)
+                    if player.equalizerEnabled {
+                        ForEach(0..<player.equalizerGains.count, id: \.self) { index in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("\(Int(AudioPlayerService.equalizerFrequencies[index])) Hz")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(player.equalizerGains[index] >= 0 ? "+\(Int(player.equalizerGains[index]))" : "\(Int(player.equalizerGains[index])) dB")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Slider(value: Binding(
+                                    get: { player.equalizerGains[index] },
+                                    set: { player.setEqualizerGain($0, at: index) }
+                                ), in: -12...12, step: 1)
+                                .tint(.green)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        Button("Reset EQ") { player.resetEQ() }
+                            .font(.caption)
+                            .foregroundStyle(.green)
                     }
                 }
                 Section("About") {

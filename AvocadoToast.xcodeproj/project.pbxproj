@@ -100,13 +100,13 @@
 			);
 			mainGroup = 5E049CB530B06CD9007CF8F0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5E049CBF30B06CD9007CF8F0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			packageReferences = (
-				5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */,
-			);
 			targets = (
 				5E049CBD30B06CD9007CF8F0 /* AvocadoToast */,
 			);
@@ -132,25 +132,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/686udjie/SwiftyTube.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.9;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		5E049CCE30B06CDB007CF8F0 /* SwiftyTube */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */;
-			productName = SwiftyTube;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5E049CC730B06CDB007CF8F0 /* Debug */ = {
@@ -284,12 +265,10 @@
 				DEVELOPMENT_TEAM = PH3QX8Q358;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleURLSchemes = (
-					avocadotoast,
-				);
-				INFOPLIST_KEY_UIBackgroundModes = audio;
+				INFOPLIST_KEY_CFBundleURLSchemes = avocadotoast;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -320,12 +299,10 @@
 				DEVELOPMENT_TEAM = PH3QX8Q358;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleURLSchemes = (
-					avocadotoast,
-				);
-				INFOPLIST_KEY_UIBackgroundModes = audio;
-INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_CFBundleURLSchemes = avocadotoast;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -368,6 +345,25 @@ INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/686udjie/SwiftyTube.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.0.9;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5E049CCE30B06CDB007CF8F0 /* SwiftyTube */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E049CCD30B06CDB007CF8F0 /* XCRemoteSwiftPackageReference "SwiftyTube" */;
+			productName = SwiftyTube;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5E049CB630B06CD9007CF8F0 /* Project object */;
 }
