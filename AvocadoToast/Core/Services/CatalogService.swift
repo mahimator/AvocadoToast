@@ -65,7 +65,8 @@ final class CatalogService: ObservableObject {
                     duration: item.duration ?? 0,
                     thumbnailURL: item.artworkURL,
                     localFileURL: item.provider == "local" ? item.providerID : nil,
-                    provider: item.provider
+                    provider: item.provider,
+                    isVideo: item.isVideo
                 )
             }
     }
