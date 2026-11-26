@@ -25,6 +25,15 @@ final class AppConfig: ObservableObject {
     @Published var selectedAppearance: Appearance = .dark {
         didSet { UserDefaults.standard.set(selectedAppearance.rawValue, forKey: Keys.selectedAppearance) }
     }
+    @Published var searchMediaMode: SearchMediaMode = .audio {
+        didSet { UserDefaults.standard.set(searchMediaMode.rawValue, forKey: Keys.searchMediaMode) }
+    }
+
+    enum SearchMediaMode: String, CaseIterable, Identifiable {
+        case audio = "Audio"
+        case video = "Video"
+        var id: String { rawValue }
+    }
 
     enum Appearance: String, CaseIterable, Identifiable {
         case system = "System"
@@ -38,6 +47,7 @@ final class AppConfig: ObservableObject {
         static let reduceMotion = "reduceMotion"
         static let artworkBackgroundEnabled = "artworkBackgroundEnabled"
         static let selectedAppearance = "selectedAppearance"
+        static let searchMediaMode = "AvocadoToast.searchMediaMode"
     }
 
     private init() {
@@ -48,6 +58,10 @@ final class AppConfig: ObservableObject {
         if let savedAppearance = defaults.string(forKey: Keys.selectedAppearance),
            let appearance = Appearance(rawValue: savedAppearance) {
             selectedAppearance = appearance
+        }
+        if let savedMode = defaults.string(forKey: Keys.searchMediaMode),
+           let mode = SearchMediaMode(rawValue: savedMode) {
+            searchMediaMode = mode
         }
     }
 }
