@@ -16,6 +16,8 @@ struct LibraryView: View {
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
     @State private var showingAudioImporter = false
+    @State private var showingFolderImporter = false
+    @State private var isRefreshingLinkedFolder = false
     @State private var importError: String?
     @State private var isImportingAudio = false
     @State private var importProgress = 0.0
@@ -24,6 +26,7 @@ struct LibraryView: View {
         NavigationStack {
             VStack(spacing: 18) {
                 header
+                linkedFolderBar
                 if isImportingAudio { importProgressView }
                 if library.isSyncingYouTubeLibrary {
                     ProgressView("Syncing your YouTube Music library…")
@@ -62,6 +65,24 @@ struct LibraryView: View {
                 switch result {
                 case .success(let urls): importAudioFiles(urls)
                 case .failure(let error): importError = error.localizedDescription
+                }
+            }
+            .fileImporter(
+                isPresented: $showingFolderImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let folder = urls.first else { return }
+                    do {
+                        try LocalAudioManager.shared.linkMusicFolder(folder)
+                        refreshLinkedFolder()
+                    } catch {
+                        importError = error.localizedDescription
+                    }
+                case .failure(let error):
+                    importError = error.localizedDescription
                 }
             }
             .alert("Audio import", isPresented: Binding(
@@ -109,7 +130,13 @@ struct LibraryView: View {
                 } label: {
                     Label("Import audio files", systemImage: "square.and.arrow.down")
                 }
-                .disabled(isImportingAudio)
+                .disabled(isImportingAudio || isRefreshingLinkedFolder)
+                Button {
+                    showingFolderImporter = true
+                } label: {
+                    Label("Link a music folder", systemImage: "folder.badge.plus")
+                }
+                .disabled(isImportingAudio || isRefreshingLinkedFolder)
             } label: {
                 Image(systemName: "plus")
                     .font(.headline)
@@ -121,6 +148,70 @@ struct LibraryView: View {
             .accessibilityLabel("Add to library")
         }
         .padding(.horizontal, 20)
+    }
+
+    @ViewBuilder
+    private var linkedFolderBar: some View {
+        if let folderName = LocalAudioManager.shared.linkedFolderName {
+            HStack(spacing: 10) {
+                Image(systemName: "folder.fill")
+                    .foregroundStyle(ColorTokens.accentPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(folderName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("Linked music folder")
+                        .font(.caption2)
+                        .foregroundStyle(ColorTokens.textSecondary)
+                }
+                Spacer()
+                Button {
+                    refreshLinkedFolder()
+                } label: {
+                    if isRefreshingLinkedFolder {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                }
+                .disabled(isRefreshingLinkedFolder || isImportingAudio)
+                .accessibilityLabel("Refresh linked music folder")
+                Menu {
+                    Button("Choose another folder", systemImage: "folder.badge.plus") {
+                        showingFolderImporter = true
+                    }
+                    Button("Unlink folder", systemImage: "link.badge.minus", role: .destructive) {
+                        LocalAudioManager.shared.unlinkMusicFolder()
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(config.enableGlassEffects ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(ColorTokens.backgroundSecondary), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(ColorTokens.separator))
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func refreshLinkedFolder() {
+        guard !isRefreshingLinkedFolder else { return }
+        isRefreshingLinkedFolder = true
+        Task { @MainActor in
+            defer { isRefreshingLinkedFolder = false }
+            do {
+                let result = try await LocalAudioManager.shared.refreshLinkedFolder()
+                library.importFolderScan(result)
+                importError = "Found \(result.files.count) audio files and updated \(result.playlists.count) folder playlists."
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
     }
 
     private func importAudioFiles(_ urls: [URL]) {
