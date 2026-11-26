@@ -255,7 +255,7 @@ final class YouTubeKitService: ObservableObject {
             options: StreamResolveOptions(
                 forDownload: false,
                 audioQuality: .high,
-                videoQuality: isVideo ? .high : .auto
+                videoQuality: .auto
             )
         )
         do {
