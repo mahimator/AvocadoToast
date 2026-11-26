@@ -57,6 +57,7 @@ final class AudioPlayerService: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
     private var shouldResumeAfterInterruption = false
+    private var remoteEQRefreshTask: Task<Void, Never>?
 
     var videoPlayer: AVPlayer { remotePlayer }
     var isUsingRemotePlayer: Bool { isRemotePlayback }
@@ -79,6 +80,42 @@ final class AudioPlayerService: ObservableObject {
             band.bypass = !equalizerEnabled
         }
         equalizer.bypass = !equalizerEnabled
+        if isRemotePlayback {
+            scheduleRemoteEqualizerRefresh()
+        }
+    }
+
+    private func scheduleRemoteEqualizerRefresh() {
+        guard isRemotePlayback,
+              let stream = currentTrack?.streamURL,
+              let url = URL(string: stream),
+              url.scheme == "https" || url.scheme == "http" else { return }
+
+        let resumeAt = currentTime
+        let shouldResume = isPlaying
+        remoteEQRefreshTask?.cancel()
+        remoteEQRefreshTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            playRemoteURL(url, startAt: resumeAt, autoplay: shouldResume)
+        }
+    }
+
+    private func installRemoteEqualizer(on item: AVPlayerItem) async {
+        guard equalizerEnabled else { return }
+        do {
+            let audioTracks = try await item.asset.loadTracks(withMediaType: .audio)
+            guard let audioTrack = audioTracks.first,
+                  remotePlayer.currentItem === item else { return }
+            item.audioMix = try RemoteEqualizerTap.makeAudioMix(
+                for: audioTrack,
+                gains: equalizerGains,
+                enabled: equalizerEnabled
+            )
+            DiagnosticLogger.shared.write("EQ remote audio tap installed bands=\(equalizerGains.count)")
+        } catch {
+            DiagnosticLogger.shared.write("EQ remote audio tap unavailable: \(error.localizedDescription)")
+        }
     }
 
     private init() {
@@ -208,7 +245,7 @@ final class AudioPlayerService: ObservableObject {
 
     // MARK: - Remote URL playback
 
-    private func playRemoteURL(_ url: URL) {
+    private func playRemoteURL(_ url: URL, startAt: Double = 0, autoplay: Bool = true) {
         isRemotePlayback = true
         bufferIsLoaded = false
         audioFile = nil
@@ -236,11 +273,34 @@ final class AudioPlayerService: ObservableObject {
                 case .readyToPlay:
                     let itemDuration = item.duration.seconds
                     if itemDuration.isFinite && itemDuration > 0 { self.duration = itemDuration }
-                    self.remotePlayer.play()
-                    self.isPlaying = self.remotePlayer.timeControlStatus == .playing
+                    Task { @MainActor in
+                        await self.installRemoteEqualizer(on: item)
+                        guard self.remotePlayer.currentItem === item else { return }
+                        let startPlayback = {
+                            if autoplay {
+                                self.remotePlayer.play()
+                            } else {
+                                self.remotePlayer.pause()
+                            }
+                            self.updateNowPlayingInfo()
+                            DiagnosticLogger.shared.write("PLAYBACK readyToPlay track='\(self.currentTrack?.videoId ?? "nil")' autoplay=\(autoplay) duration=\(self.duration)")
+                        }
+                        if startAt > 0 {
+                            self.remotePlayer.seek(
+                                to: CMTime(seconds: startAt, preferredTimescale: 600),
+                                toleranceBefore: .zero,
+                                toleranceAfter: .zero
+                            ) { _ in
+                                Task { @MainActor in
+                                    guard self.remotePlayer.currentItem === item else { return }
+                                    startPlayback()
+                                }
+                            }
+                        } else {
+                            startPlayback()
+                        }
+                    }
                     self.errorMessage = nil
-                    self.updateNowPlayingInfo()
-                    DiagnosticLogger.shared.write("PLAYBACK readyToPlay track='\(self.currentTrack?.videoId ?? "nil")' isPlaying=\(self.isPlaying) duration=\(self.duration)")
                 case .failed:
                     self.errorMessage = item.error?.localizedDescription ?? "This audio source couldn't be played."
                     self.isPlaying = false
@@ -349,6 +409,8 @@ final class AudioPlayerService: ObservableObject {
     }
 
     private func stopPlaybackOnly() {
+        remoteEQRefreshTask?.cancel()
+        remoteEQRefreshTask = nil
         itemStatusObservation?.invalidate()
         itemStatusObservation = nil
         remotePlayer.pause()
