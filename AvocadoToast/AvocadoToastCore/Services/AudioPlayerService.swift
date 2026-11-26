@@ -146,6 +146,17 @@ final class AudioPlayerService: ObservableObject {
                 self.onPlaybackFinished?()
             }
         }
+
+        timeControlObservation = remotePlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, self.isRemotePlayback else { return }
+                self.isPlaying = player.timeControlStatus == .playing
+                if player.timeControlStatus == .playing {
+                    self.errorMessage = nil
+                }
+                self.updateNowPlayingInfo()
+            }
+        }
     }
 
     // MARK: - Public playback
@@ -542,6 +553,7 @@ final class AudioPlayerService: ObservableObject {
         if let finishObserver {
             NotificationCenter.default.removeObserver(finishObserver)
         }
+        timeControlObservation?.invalidate()
         if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
         if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
         itemStatusObservation?.invalidate()
