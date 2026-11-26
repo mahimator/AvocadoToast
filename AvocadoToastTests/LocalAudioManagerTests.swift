@@ -142,6 +142,25 @@ final class LocalAudioManagerTests: XCTestCase {
         }
     }
 
+    func testLinkedFolderCreatesPlaylistForEachFolderContainingAudio() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let jazz = root.appendingPathComponent("Jazz", isDirectory: true)
+        try FileManager.default.createDirectory(at: jazz, withIntermediateDirectories: true)
+
+        let rootSong = try makeTestAudioFile(ext: "m4a")
+        let jazzSong = try makeTestAudioFile(ext: "m4a")
+        try FileManager.default.copyItem(at: rootSong, to: root.appendingPathComponent("Root Song.m4a"))
+        try FileManager.default.copyItem(at: jazzSong, to: jazz.appendingPathComponent("Jazz Song.m4a"))
+
+        try manager.linkMusicFolder(root)
+        let result = try await manager.refreshLinkedFolder()
+
+        XCTAssertEqual(result.files.count, 2)
+        XCTAssertEqual(Set(result.playlists.map(\.name)), Set([root.lastPathComponent, "Jazz"]))
+        XCTAssertEqual(result.playlists.first(where: { $0.name == "Jazz" })?.trackIDs.count, 1)
+        XCTAssertTrue(result.failures.isEmpty)
+    }
+
     func testDeleteAndClearImportedAudio() async throws {
         let url = try makeTestAudioFile(ext: "m4a")
         let imported = try await manager.importAudio(from: url)
