@@ -27,7 +27,6 @@ private final class RemoteEQTapState {
     private var z2: [[Float]] = []
     private var channelCount = 2
     private var isFloat32 = false
-    private var isInterleaved = false
 
     init(gains: [Float], enabled: Bool) {
         self.gains = gains
@@ -38,7 +37,6 @@ private final class RemoteEQTapState {
         channelCount = max(1, Int(format.mChannelsPerFrame))
         isFloat32 = (format.mFormatFlags & kAudioFormatFlagIsFloat) != 0
             && format.mBitsPerChannel == 32
-        isInterleaved = (format.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
 
         z1 = Array(repeating: Array(repeating: 0, count: gains.count), count: channelCount)
         z2 = Array(repeating: Array(repeating: 0, count: gains.count), count: channelCount)
