@@ -346,7 +346,7 @@ final class LibraryService: ObservableObject {
         }
 
         for folder in result.playlists {
-            let playlistID = "local-folder:" + folder.relativeFolderPath
+            let playlistID = "local-folder:" + result.folderName + ":" + folder.relativeFolderPath
             let members = folder.trackIDs.compactMap { modelsByID[$0] }
             if let existing = savedPlaylists.first(where: { $0.id == playlistID }) {
                 existing.name = folder.name
