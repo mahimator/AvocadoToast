@@ -571,7 +571,7 @@ private struct EqualizerSheet: View {
                 Section {
                     Label(
                         player.isUsingRemotePlayer
-                            ? "This EQ currently processes imported and local audio. Online streams use the native streaming player and are not routed through this EQ yet."
+                            ? "EQ is applied to decoded stream audio. Changing bands briefly reloads the current stream at the same position."
                             : "EQ is active on the local audio engine.",
                         systemImage: "info.circle"
                     )
