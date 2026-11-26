@@ -32,6 +32,7 @@ struct FolderScanResult: Sendable {
     let folderName: String
     let files: [ImportedAudio]
     let playlists: [ImportedFolderPlaylist]
+    let failures: [String]
 }
 
 @MainActor
@@ -99,10 +100,8 @@ final class LocalAudioManager: ObservableObject {
             relativeTo: nil,
             bookmarkDataIsStale: &stale
         )
-        guard root.startAccessingSecurityScopedResource() else {
-            throw LocalAudioImportError.folderPermissionExpired
-        }
-        defer { root.stopAccessingSecurityScopedResource() }
+        let hasAccess = root.startAccessingSecurityScopedResource()
+        defer { if hasAccess { root.stopAccessingSecurityScopedResource() } }
 
         if stale {
             let renewed = try root.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -130,14 +129,19 @@ final class LocalAudioManager: ObservableObject {
 
         sources.sort { $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending }
         var imported: [ImportedAudio] = []
+        var failures: [String] = []
         for source in sources {
-            let item = try await Self.importAudioFile(
-                from: source.url,
-                into: audioDir,
-                relativePath: source.relativePath,
-                relativeFolderPath: source.relativeFolderPath
-            )
-            imported.append(item)
+            do {
+                let item = try await Self.importAudioFile(
+                    from: source.url,
+                    into: audioDir,
+                    relativePath: source.relativePath,
+                    relativeFolderPath: source.relativeFolderPath
+                )
+                imported.append(item)
+            } catch {
+                failures.append("\(source.relativePath): \(error.localizedDescription)")
+            }
         }
 
         let grouped = Dictionary(grouping: imported, by: \.relativeFolderPath)
@@ -151,7 +155,7 @@ final class LocalAudioManager: ObservableObject {
             )
         }
 
-        return FolderScanResult(folderName: root.lastPathComponent, files: imported, playlists: playlists)
+        return FolderScanResult(folderName: root.lastPathComponent, files: imported, playlists: playlists, failures: failures)
     }
 
     nonisolated private static func importAudioFile(
@@ -169,10 +173,25 @@ final class LocalAudioManager: ObservableObject {
         let id = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
         let destination = audioDir.appendingPathComponent(id).appendingPathExtension(ext)
 
-        if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
+        let sourceAttributes = try fileManager.attributesOfItem(atPath: sourceURL.path)
+        let destinationAttributes = try? fileManager.attributesOfItem(atPath: destination.path)
+        let sourceSize = (sourceAttributes[.size] as? NSNumber)?.int64Value
+        let destinationSize = (destinationAttributes?[.size] as? NSNumber)?.int64Value
+        let sourceDate = sourceAttributes[.modificationDate] as? Date
+        let destinationDate = destinationAttributes?[.modificationDate] as? Date
+        let isUnchanged = destinationAttributes != nil
+            && sourceSize == destinationSize
+            && sourceDate == destinationDate
+
+        if !isUnchanged {
+            let temporary = audioDir.appendingPathComponent("\(id).importing")
+            try? fileManager.removeItem(at: temporary)
+            try fileManager.copyItem(at: sourceURL, to: temporary)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.moveItem(at: temporary, to: destination)
         }
-        try fileManager.copyItem(at: sourceURL, to: destination)
 
         do {
             let audioFile = try AVAudioFile(forReading: destination)
