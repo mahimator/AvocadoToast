@@ -345,6 +345,16 @@ final class LibraryService: ObservableObject {
             }
         }
 
+        let currentFolderPlaylistIDs = Set(result.playlists.map {
+            "local-folder:" + result.folderName + ":" + $0.relativeFolderPath
+        })
+        for existing in savedPlaylists where
+            existing.metadata["source"] == "linked-folder"
+            && existing.metadata["linkedFolder"] == result.folderName
+            && !currentFolderPlaylistIDs.contains(existing.id) {
+            context.delete(existing)
+        }
+
         for folder in result.playlists {
             let playlistID = "local-folder:" + result.folderName + ":" + folder.relativeFolderPath
             let members = folder.trackIDs.compactMap { modelsByID[$0] }
