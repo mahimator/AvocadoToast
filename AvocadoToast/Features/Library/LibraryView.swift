@@ -184,7 +184,8 @@ struct LibraryView: View {
                 .accessibilityLabel("Refresh linked music folder")
                 Menu {
                     Button("Choose another folder", systemImage: "folder.badge.plus") {
-                        showingFolderImporter = true
+                        isSelectingFolder = true
+                        showingFileImporter = true
                     }
                     Button("Unlink folder", systemImage: "link.badge.minus", role: .destructive) {
                         localAudioManager.unlinkMusicFolder()
