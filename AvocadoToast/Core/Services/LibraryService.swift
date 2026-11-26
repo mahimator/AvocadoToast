@@ -146,7 +146,7 @@ final class LibraryService: ObservableObject {
             artistName: track.artist,
             artworkURL: track.thumbnailURL.flatMap { URL(string: $0) },
             duration: track.duration,
-            isVideo: track.provider != "local",
+            isVideo: track.isVideo,
             isPlayable: true
         )
         DiagnosticLogger.shared.write("LIBRARY toggleSave id='\(track.videoId)' provider='\(track.provider)' title='\(track.title)' isSaved=\(isTrackSaved(id: track.videoId, provider: track.provider))")
