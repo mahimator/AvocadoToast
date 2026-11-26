@@ -254,7 +254,7 @@ final class LocalAudioManager: ObservableObject {
     }
 }
 
-enum LocalAudioImportError: LocalizedError {
+enum LocalAudioImportError: LocalizedError, Equatable {
     case unsupportedFormat
     case invalidFolder
     case noLinkedFolder
