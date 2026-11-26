@@ -23,9 +23,6 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project AvocadoToast.xcodeproj
-
       - name: Build iOS Simulator target
         run: |
           xcodebuild \
