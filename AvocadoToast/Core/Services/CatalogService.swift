@@ -395,7 +395,7 @@ final class CatalogService: ObservableObject {
     // MARK: - Stream resolution & playback
 
     func resolveStream(for track: YouTubeTrack) async -> String? {
-        let streamURL = await youtubeService.resolveStream(videoId: track.videoId)
+        let streamURL = await youtubeService.resolveStream(videoId: track.videoId, isVideo: track.isVideo)
         return streamURL
     }
 
