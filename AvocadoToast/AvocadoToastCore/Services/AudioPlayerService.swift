@@ -31,7 +31,7 @@ final class AudioPlayerService: ObservableObject {
         return stored?.map(\.floatValue) ?? Array(repeating: 0, count: 10)
     }() {
         didSet {
-            UserDefaults.standard.set(equalizerGains.map(NSNumber.init(value:)), forKey: "AvocadoToast.eq.gains")
+            UserDefaults.standard.set(equalizerGains.map { NSNumber(value: $0) }, forKey: "AvocadoToast.eq.gains")
             applyEqualizerSettings()
         }
     }
