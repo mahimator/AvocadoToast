@@ -16,8 +16,8 @@ struct LibraryView: View {
     @ObservedObject private var config = AppConfig.shared
     @State private var selectedFilter: LibraryFilter = .songs
     @State private var showingNewPlaylist = false
-    @State private var showingAudioImporter = false
-    @State private var showingFolderImporter = false
+    @State private var showingFileImporter = false
+    @State private var isSelectingFolder = false
     @State private var isRefreshingLinkedFolder = false
     @State private var importError: String?
     @State private var isImportingAudio = false
@@ -59,28 +59,22 @@ struct LibraryView: View {
                     .presentationDragIndicator(.visible)
             }
             .fileImporter(
-                isPresented: $showingAudioImporter,
-                allowedContentTypes: [.audio],
-                allowsMultipleSelection: true
-            ) { result in
-                switch result {
-                case .success(let urls): importAudioFiles(urls)
-                case .failure(let error): importError = error.localizedDescription
-                }
-            }
-            .fileImporter(
-                isPresented: $showingFolderImporter,
-                allowedContentTypes: [.folder],
-                allowsMultipleSelection: false
+                isPresented: $showingFileImporter,
+                allowedContentTypes: isSelectingFolder ? [.folder] : [.audio],
+                allowsMultipleSelection: !isSelectingFolder
             ) { result in
                 switch result {
                 case .success(let urls):
-                    guard let folder = urls.first else { return }
-                    do {
-                        try localAudioManager.linkMusicFolder(folder)
-                        refreshLinkedFolder()
-                    } catch {
-                        importError = error.localizedDescription
+                    guard !urls.isEmpty else { return }
+                    if isSelectingFolder {
+                        do {
+                            try localAudioManager.linkMusicFolder(urls[0])
+                            refreshLinkedFolder()
+                        } catch {
+                            importError = error.localizedDescription
+                        }
+                    } else {
+                        importAudioFiles(urls)
                     }
                 case .failure(let error):
                     importError = error.localizedDescription
@@ -134,13 +128,15 @@ struct LibraryView: View {
                     Label("Create playlist", systemImage: "music.note.list")
                 }
                 Button {
-                    showingAudioImporter = true
+                    isSelectingFolder = false
+                    showingFileImporter = true
                 } label: {
                     Label("Import audio files", systemImage: "square.and.arrow.down")
                 }
                 .disabled(isImportingAudio || isRefreshingLinkedFolder)
                 Button {
-                    showingFolderImporter = true
+                    isSelectingFolder = true
+                    showingFileImporter = true
                 } label: {
                     Label("Link a music folder", systemImage: "folder.badge.plus")
                 }
