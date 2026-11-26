@@ -62,7 +62,7 @@ final class LocalAudioManager: ObservableObject {
         return try await Self.importAudioFile(
             from: sourceURL,
             into: audioDir,
-            relativePath: sourceURL.lastPathComponent,
+            relativePath: "manual-import-\(UUID().uuidString)-\(sourceURL.lastPathComponent)",
             relativeFolderPath: ""
         )
     }
