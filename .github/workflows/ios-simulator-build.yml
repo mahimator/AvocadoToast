@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,10 +23,13 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Install CocoaPods dependencies
+        run: pod install --repo-update
+
       - name: Build iOS Simulator target
         run: |
           xcodebuild \
-            -project AvocadoToast.xcodeproj \
+            -workspace AvocadoToast.xcworkspace \
             -scheme AvocadoToast \
             -configuration Debug \
             -sdk iphonesimulator \
