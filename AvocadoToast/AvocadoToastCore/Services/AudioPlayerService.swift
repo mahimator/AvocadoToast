@@ -9,6 +9,7 @@ import Foundation
 import Combine
 import AVFoundation
 import MediaPlayer
+import MobileVLCKit
 
 @MainActor
 final class AudioPlayerService: ObservableObject {
@@ -18,6 +19,8 @@ final class AudioPlayerService: ObservableObject {
     private let playerNode = AVAudioPlayerNode()
     private let equalizer = AVAudioUnitEQ(numberOfBands: 10)
     private let remotePlayer = AVPlayer()
+    private let vlcPlayer = VLCMediaPlayer()
+    private var isUsingVLCPlayback = false
 
     static let equalizerFrequencies: [Float] = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
     @Published var equalizerEnabled: Bool = UserDefaults.standard.object(forKey: "AvocadoToast.eq.enabled") as? Bool ?? true {
@@ -60,7 +63,7 @@ final class AudioPlayerService: ObservableObject {
     private var remoteEQRefreshTask: Task<Void, Never>?
 
     var videoPlayer: AVPlayer { remotePlayer }
-    var isUsingRemotePlayer: Bool { isRemotePlayback }
+    var isUsingRemotePlayer: Bool { isRemotePlayback && !isUsingVLCPlayback }
 
     func setEqualizerGain(_ gain: Float, at index: Int) {
         guard equalizerGains.indices.contains(index) else { return }
@@ -84,9 +87,26 @@ final class AudioPlayerService: ObservableObject {
             band.bypass = !equalizerEnabled
         }
         equalizer.bypass = !equalizerEnabled
-        if isRemotePlayback {
+        if isUsingVLCPlayback {
+            applyVLCEqualizer()
+        } else if isRemotePlayback {
             scheduleRemoteEqualizerRefresh()
         }
+    }
+
+    private func applyVLCEqualizer() {
+        vlcPlayer.equalizerEnabled = equalizerEnabled
+        guard equalizerEnabled else { return }
+        let bandCount = Int(vlcPlayer.numberOfBands)
+        guard bandCount > 0 else { return }
+        for band in 0..<bandCount {
+            let frequency = Float(vlcPlayer.frequencyOfBand(at: UInt(band)))
+            guard let nearest = Self.equalizerFrequencies.indices.min(by: {
+                abs(Self.equalizerFrequencies[$0] - frequency) < abs(Self.equalizerFrequencies[$1] - frequency)
+            }) else { continue }
+            vlcPlayer.setAmplification(CGFloat(equalizerGains[nearest]), forBand: UInt(band))
+        }
+        vlcPlayer.equalizerEnabled = true
     }
 
     private func scheduleRemoteEqualizerRefresh() {
@@ -223,7 +243,11 @@ final class AudioPlayerService: ObservableObject {
             return
         }
 
-        playRemoteURL(url)
+        if track.isVideo {
+            playRemoteURL(url)
+        } else {
+            playVLCURL(url)
+        }
     }
 
     // MARK: - Local file playback
@@ -321,6 +345,43 @@ final class AudioPlayerService: ObservableObject {
         updateNowPlayingInfo()
     }
 
+    // MARK: - VLC playback for broad codec/container support
+
+    private func playVLCURL(_ url: URL, startAt: Double = 0, autoplay: Bool = true) {
+        isRemotePlayback = true
+        isUsingVLCPlayback = true
+        bufferIsLoaded = false
+        audioFile = nil
+        playerNode.stop()
+        remotePlayer.pause()
+        remotePlayer.replaceCurrentItem(with: nil)
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
+
+        let media = VLCMedia(url: url)
+        media.addOptions([
+            "http-user-agent": "com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+            "http-referrer": "https://www.youtube.com/",
+            "network-caching": "1200",
+            "http-reconnect": "true"
+        ])
+        vlcPlayer.media = media
+        applyVLCEqualizer()
+        vlcPlayer.play()
+        if !autoplay { vlcPlayer.pause() }
+        if startAt > 0 {
+            let milliseconds = Int32(min(startAt, Double(Int32.max) / 1000) * 1000)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self, self.isUsingVLCPlayback else { return }
+                self.vlcPlayer.time = VLCTime(int: milliseconds)
+            }
+        }
+        isPlaying = autoplay
+        startProgressTimer()
+        DiagnosticLogger.shared.write("PLAYBACK VLC started urlHost=\(url.host ?? "unknown")")
+        updateNowPlayingInfo()
+    }
+
     // MARK: - Local engine playback
 
     private func playLocalEngine() {
@@ -356,7 +417,9 @@ final class AudioPlayerService: ObservableObject {
     // MARK: - Playback control
 
     func pause() {
-        if isRemotePlayback {
+        if isUsingVLCPlayback {
+            vlcPlayer.pause()
+        } else if isRemotePlayback {
             remotePlayer.pause()
         } else {
             playerNode.pause()
@@ -375,7 +438,12 @@ final class AudioPlayerService: ObservableObject {
             errorMessage = "Audio session couldn't resume: \(error.localizedDescription)"
             return
         }
-        if isRemotePlayback, let item = remotePlayer.currentItem {
+        if isUsingVLCPlayback {
+            vlcPlayer.play()
+            isPlaying = true
+            startProgressTimer()
+            updateNowPlayingInfo()
+        } else if isRemotePlayback, let item = remotePlayer.currentItem {
             if item.status == .failed {
                 if let onPlaybackRetry {
                     onPlaybackRetry()
@@ -419,6 +487,8 @@ final class AudioPlayerService: ObservableObject {
         itemStatusObservation = nil
         remotePlayer.pause()
         remotePlayer.replaceCurrentItem(with: nil)
+        vlcPlayer.stop()
+        isUsingVLCPlayback = false
         playerNode.stop()
         stopProgressTimer()
         isPlaying = false
@@ -438,7 +508,11 @@ final class AudioPlayerService: ObservableObject {
 
     func seek(to time: Double) {
         let target = min(max(0, time), max(duration, 0))
-        if isRemotePlayback {
+        if isUsingVLCPlayback {
+            let milliseconds = Int32(min(target, Double(Int32.max) / 1000) * 1000)
+            vlcPlayer.time = VLCTime(int: milliseconds)
+            currentTime = target
+        } else if isRemotePlayback {
             remotePlayer.seek(to: CMTime(seconds: target, preferredTimescale: 600))
             currentTime = target
         } else if let audioFile {
@@ -471,7 +545,24 @@ final class AudioPlayerService: ObservableObject {
     private func startProgressTimer() {
         stopProgressTimer()
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateLocalPlaybackTime() }
+            Task { @MainActor in
+                guard let self else { return }
+                if self.isUsingVLCPlayback {
+                    let elapsed = Double(self.vlcPlayer.time?.intValue ?? 0) / 1000
+                    if elapsed.isFinite { self.currentTime = max(0, elapsed) }
+                    let length = Double(self.vlcPlayer.media?.length?.intValue ?? 0) / 1000
+                    if length.isFinite && length > 0 { self.duration = length }
+                    self.isPlaying = self.vlcPlayer.isPlaying
+                    if self.duration > 0 && self.currentTime >= self.duration - 0.35 && !self.isPlaying {
+                        self.currentTime = self.duration
+                        self.stopProgressTimer()
+                        self.onPlaybackFinished?()
+                    }
+                    self.updateNowPlayingInfo()
+                } else {
+                    self.updateLocalPlaybackTime()
+                }
+            }
         }
     }
 
@@ -624,6 +715,7 @@ final class AudioPlayerService: ObservableObject {
         if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
         itemStatusObservation?.invalidate()
         progressTimer?.invalidate()
+        vlcPlayer.stop()
         playerNode.stop()
         engine.stop()
     }
