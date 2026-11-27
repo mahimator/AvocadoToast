@@ -1,0 +1,10 @@
+# CocoaPods dependencies and generated workspace
+Pods/
+AvocadoToast.xcworkspace/
+
+# Xcode user and build artifacts
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.DS_Store
