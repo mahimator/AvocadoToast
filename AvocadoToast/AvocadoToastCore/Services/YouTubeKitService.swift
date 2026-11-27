@@ -246,25 +246,32 @@ final class YouTubeKitService: ObservableObject {
             return mime.contains("video/mp4") && mime.contains("mp4a")
         }
 
-        // Strategy 1: Direct iOS client player response — gives iPhone-compatible
-        // URLs with AAC/MP4A formats that AVPlayer can play natively.
-        do {
-            let response = try await client.player(videoId: videoId, client: isVideo ? .web : .iOS)
-            if let streamingData = response["streamingData"] as? [String: Any] {
-                let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
-                    + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
-                for format in formats {
-                    let mime = format["mimeType"] as? String
-                    let compatible = isVideo ? isMP4Video(mime) : isAACCompatible(mime)
-                    if compatible, let url = usableURL(format["url"] as? String) {
-                        DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: isVideo ? "web_player_mp4" : "ios_player_aac", success: true, error: nil)
-                        return url
+        // Strategy 1: Direct player response from multiple clients — gives
+        // iPhone-compatible AAC/MP4A formats that AVPlayer can play natively.
+        // Try iOS first (native iPhone formats), then web as fallback.
+        let playerClients: [YouTubeClient] = isVideo ? [.web, .iOS] : [.iOS, .web]
+        var lastPlayerError: Error?
+        for pClient in playerClients {
+            do {
+                let response = try await client.player(videoId: videoId, client: pClient)
+                if let streamingData = response["streamingData"] as? [String: Any] {
+                    let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
+                        + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
+                    for format in formats {
+                        let mime = format["mimeType"] as? String
+                        let compatible = isVideo ? isMP4Video(mime) : isAACCompatible(mime)
+                        if compatible, let url = usableURL(format["url"] as? String) {
+                            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "\(pClient.clientName)_player", success: true, error: nil)
+                            return url
+                        }
                     }
                 }
+                DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "\(pClient.clientName)_player", success: false, error: "No directly usable \(isVideo ? "video" : "audio") URL in player response")
+            } catch {
+                lastPlayerError = error
+                DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "\(pClient.clientName)_player", success: false, error: error.localizedDescription)
+                continue
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: "No directly usable \(isVideo ? "video" : "audio") URL in player response")
-        } catch {
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "ios_player_aac", success: false, error: error.localizedDescription)
         }
 
         // Strategy 2: SwiftyTube's complete live provider bundle.
