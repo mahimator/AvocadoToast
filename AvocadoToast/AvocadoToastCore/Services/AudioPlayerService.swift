@@ -265,9 +265,12 @@ final class AudioPlayerService: ObservableObject {
             isRemotePlayback = false
             playLocalEngine()
         } catch {
+            // AVAudioFile does not decode every container/codec on iOS.
+            // Fall back to VLC for FLAC, Ogg, Opus and other supported files.
+            DiagnosticLogger.shared.write("LOCAL_AUDIO native decoder fallback: \(error.localizedDescription)")
             audioFile = nil
             bufferIsLoaded = false
-            errorMessage = "Couldn't open local audio: \(error.localizedDescription)"
+            playVLCURL(url)
         }
     }
 
