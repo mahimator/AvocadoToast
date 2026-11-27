@@ -168,6 +168,24 @@ final class YouTubeKitService: ObservableObject {
                         DiagnosticLogger.shared.logSearch(term: term, type: "audio", client: client.clientName, resultCount: result.count, error: nil)
                         return Array(result)
                     }
+                    // Fallback: search JSON often uses videoRenderer rows instead of
+                    // musicResponsiveListItemRenderer, so try the general parser too.
+                    let videos = YouTubeFeedParser.searchResults(in: json).videos
+                        .filter { !$0.videoId.isEmpty && !$0.title.isEmpty }
+                    if !videos.isEmpty {
+                        let result = videos.prefix(limit).map { video in
+                            YouTubeTrack(
+                                videoId: video.videoId,
+                                title: video.title,
+                                artist: video.channelTitle ?? "Unknown Artist",
+                                duration: video.durationSeconds.map { Double($0) } ?? 0,
+                                thumbnailURL: video.thumbnailURL,
+                                isVideo: false
+                            )
+                        }
+                        DiagnosticLogger.shared.logSearch(term: term, type: "audio_fallback", client: client.clientName, resultCount: result.count, error: nil)
+                        return Array(result)
+                    }
                 } else {
                     // Video mode uses the general YouTube search result parser.
                     let videos = YouTubeFeedParser.searchResults(in: json).videos

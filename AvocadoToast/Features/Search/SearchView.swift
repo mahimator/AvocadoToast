@@ -86,14 +86,14 @@ struct SearchView: View {
                 if value.isEmpty {
                     viewModel.cancelSearch()
                 } else {
-                    viewModel.debounceSearch(value, type: selectedCategory)
+                    viewModel.debounceSearch(value, type: selectedCategory, mediaMode: config.searchMediaMode)
                 }
             }
             .onChange(of: selectedCategory) { _, category in
-                if !query.isEmpty { viewModel.searchNow(query, type: category) }
+                if !query.isEmpty { viewModel.searchNow(query, type: category, mediaMode: config.searchMediaMode) }
             }
             .onChange(of: config.searchMediaMode) { _, _ in
-                if !query.isEmpty { viewModel.searchNow(query, type: selectedCategory) }
+                if !query.isEmpty { viewModel.searchNow(query, type: selectedCategory, mediaMode: config.searchMediaMode) }
             }
         }
     }
@@ -134,7 +134,7 @@ struct SearchView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
-                .onSubmit { viewModel.searchNow(query, type: selectedCategory) }
+                .onSubmit { viewModel.searchNow(query, type: selectedCategory, mediaMode: config.searchMediaMode) }
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -477,12 +477,12 @@ final class SearchViewModel: ObservableObject {
         recentSearches = searchService.recentSearches
     }
 
-    func debounceSearch(_ text: String, type: SearchType = .songs) {
+    func debounceSearch(_ text: String, type: SearchType = .songs, mediaMode: AppConfig.SearchMediaMode = .audio) {
         debounceTask?.cancel()
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled else { return }
-            searchNow(text, type: type)
+            searchNow(text, type: type, mediaMode: mediaMode)
         }
     }
 
@@ -492,7 +492,7 @@ final class SearchViewModel: ObservableObject {
         searchService.cancelSearch()
     }
 
-    func searchNow(_ text: String, type: SearchType = .songs) {
+    func searchNow(_ text: String, type: SearchType = .songs, mediaMode: AppConfig.SearchMediaMode = .audio) {
         debounceTask?.cancel()
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else {
@@ -501,7 +501,7 @@ final class SearchViewModel: ObservableObject {
         }
         searchService.addRecent(cleaned)
         recentSearches = searchService.recentSearches
-        CatalogService.shared.search(query: cleaned, type: type)
+        CatalogService.shared.search(query: cleaned, type: type, mediaMode: mediaMode)
     }
 
     func select(_ track: YouTubeTrack) {
