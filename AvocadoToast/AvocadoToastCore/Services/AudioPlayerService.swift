@@ -363,10 +363,10 @@ final class AudioPlayerService: ObservableObject {
 
         let media = VLCMedia(url: url)
         media.addOptions([
-            "http-user-agent": "com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
-            "http-referrer": "https://www.youtube.com/",
-            "network-caching": "1200",
-            "http-reconnect": "true"
+            ":http-user-agent": "com.google.ios.youtube/21.26.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+            ":http-referrer": "https://www.youtube.com/",
+            ":network-caching": "1200",
+            ":http-reconnect": "true"
         ])
         vlcPlayer.media = media
         applyVLCEqualizer()
