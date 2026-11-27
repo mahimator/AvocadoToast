@@ -236,11 +236,22 @@ final class YouTubeKitService: ObservableObject {
             return value
         }
 
-        func isSupportedAudio(_ mimeType: String?) -> Bool {
+        /// VLC decodes AAC/MP4A, Opus/WebM, Vorbis/Ogg, FLAC and many other
+        /// audio codecs. Accept any format that carries an audio track, whether
+        /// it's a pure audio stream (`audio/...`) or a combined video+audio
+        /// stream (`video/...` with an audio codec). VLC will extract the audio.
+        func isAudioBearing(_ mimeType: String?, codec: String? = nil) -> Bool {
             guard let mime = mimeType?.lowercased() else { return false }
-            // VLC decodes AAC/MP4A, Opus/WebM, Vorbis/Ogg, FLAC and other
-            // audio codecs. Keep video streams out of the audio-only path.
-            return mime.hasPrefix("audio/") || mime.contains("audio")
+            // Pure audio streams are always acceptable.
+            if mime.hasPrefix("audio/") { return true }
+            // Combined video+audio: check the codec string for known audio codecs.
+            if let codec = codec?.lowercased() {
+                let audioCodecs = ["mp4a", "aac", "opus", "vorbis", "flac", "ac3", "ec-3", "eac3", "dts", "pcm", "alac"]
+                if audioCodecs.contains(where: codec.contains) { return true }
+            }
+            // Fallback: mime string itself mentions an audio codec.
+            let audioHints = ["mp4a", "aac", "opus", "vorbis", "flac"]
+            return audioHints.contains(where: mime.contains)
         }
 
         func isMP4Video(_ mimeType: String?) -> Bool {
@@ -248,9 +259,8 @@ final class YouTubeKitService: ObservableObject {
             return mime.contains("video/mp4") && mime.contains("mp4a")
         }
 
-        // Strategy 1: Direct player response from multiple clients. Audio is
-        // decoded by VLC, so retain WebM/Opus and other audio-only formats.
-        // Video remains MP4/AAC because its presentation still uses AVPlayer.
+        // Strategy 1: Direct player response from multiple clients.
+        // Try iOS first (native iPhone formats), then web as fallback.
         let playerClients: [YouTubeClient] = isVideo ? [.web, .iOS] : [.iOS, .web]
         var lastPlayerError: Error?
         for pClient in playerClients {
@@ -259,9 +269,16 @@ final class YouTubeKitService: ObservableObject {
                 if let streamingData = response["streamingData"] as? [String: Any] {
                     let formats = (streamingData["formats"] as? [[String: Any]] ?? [])
                         + (streamingData["adaptiveFormats"] as? [[String: Any]] ?? [])
+                    DiagnosticLogger.shared.write("STREAM_DEBUG videoId='\(videoId)' client='\(pClient.clientName)' totalFormats=\(formats.count)")
+                    for format in formats {
+                        let mime = format["mimeType"] as? String ?? ""
+                        let hasUrl = (format["url"] as? String) != nil
+                        DiagnosticLogger.shared.write("STREAM_DEBUG videoId='\(videoId)' format='\(mime)' hasUrl=\(hasUrl) itag=\(format["itag"] ?? "?")")
+                    }
                     for format in formats {
                         let mime = format["mimeType"] as? String
-                        let compatible = isVideo ? isMP4Video(mime) : isSupportedAudio(mime)
+                        let codec = format["codecs"] as? String
+                        let compatible = isVideo ? isMP4Video(mime) : isAudioBearing(mime, codec: codec)
                         if compatible, let url = usableURL(format["url"] as? String) {
                             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 1, client: "\(pClient.clientName)_player", success: true, error: nil)
                             return url
@@ -292,12 +309,12 @@ final class YouTubeKitService: ObservableObject {
                 providers: .live
             )
             if let mimeType = result.mimeType as? String,
-               (isVideo ? isMP4Video(mimeType) : isSupportedAudio(mimeType)),
+               (isVideo ? isMP4Video(mimeType) : isAudioBearing(mimeType)),
                let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: true, error: nil)
                 return url
             }
-            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "No AVPlayer-compatible \(isVideo ? "MP4 video" : "audio") URL from fallback provider")
+            DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: "No audio-compatible \(isVideo ? "MP4 video" : "audio") URL from fallback provider")
         } catch {
             DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 2, client: "fallback_live", success: false, error: error.localizedDescription)
         }
@@ -312,7 +329,7 @@ final class YouTubeKitService: ObservableObject {
                 providers: .live
             )
             if let mimeType = result.mimeType as? String,
-               (isVideo ? isMP4Video(mimeType) : isSupportedAudio(mimeType)),
+               (isVideo ? isMP4Video(mimeType) : isAudioBearing(mimeType)),
                let url = usableURL(result.streamUrl) {
                 DiagnosticLogger.shared.logStream(videoId: videoId, attempt: 3, client: "youtube_fallback", success: true, error: nil)
                 return url
