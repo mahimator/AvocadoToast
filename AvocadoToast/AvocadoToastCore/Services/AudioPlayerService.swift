@@ -100,11 +100,12 @@ final class AudioPlayerService: ObservableObject {
         let bandCount = Int(vlcPlayer.numberOfBands)
         guard bandCount > 0 else { return }
         for band in 0..<bandCount {
-            let frequency = Float(vlcPlayer.frequencyOfBand(at: UInt(band)))
+            let bandIdx = UInt32(band)
+            let frequency = Float(vlcPlayer.frequencyOfBand(at: bandIdx))
             guard let nearest = Self.equalizerFrequencies.indices.min(by: {
                 abs(Self.equalizerFrequencies[$0] - frequency) < abs(Self.equalizerFrequencies[$1] - frequency)
             }) else { continue }
-            vlcPlayer.setAmplification(CGFloat(equalizerGains[nearest]), forBand: UInt(band))
+            vlcPlayer.setAmplification(CGFloat(equalizerGains[nearest]), forBand: bandIdx)
         }
         vlcPlayer.equalizerEnabled = true
     }
@@ -551,9 +552,9 @@ final class AudioPlayerService: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if self.isUsingVLCPlayback {
-                    let elapsed = Double(self.vlcPlayer.time?.intValue ?? 0) / 1000
+                    let elapsed = Double(self.vlcPlayer.time.intValue) / 1000
                     if elapsed.isFinite { self.currentTime = max(0, elapsed) }
-                    let length = Double(self.vlcPlayer.media?.length?.intValue ?? 0) / 1000
+                    let length = Double(self.vlcPlayer.media?.length.intValue ?? 0) / 1000
                     if length.isFinite && length > 0 { self.duration = length }
                     self.isPlaying = self.vlcPlayer.isPlaying
                     if self.duration > 0 && self.currentTime >= self.duration - 0.35 && !self.isPlaying {
